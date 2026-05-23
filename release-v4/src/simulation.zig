@@ -71,9 +71,9 @@ fn eventAction(rng: Random, simconf: *const SimConfig, t_clock: f64, user_id: In
     return event;
 }
 
-fn eventSessionStart(rng: Random, simconf: *const SimConfig, t_clock: f64, user_id: Index, session_id: u32, generated_events: u64) Event {
+fn eventSessionStart(rng: Random, users: *const std.MultiArrayList(User), t_clock: f64, user_id: Index, session_id: u32, generated_events: u64) Event {
     // when will the user go online
-    const offline_duration = simconf.user_inter_session.sample(rng);
+    const offline_duration = users.items(.inter_session_time)[user_id].sample(rng);
     const event_start = Event{
         .time = t_clock + offline_duration,
         .type = .{ .session = .start },
@@ -84,9 +84,9 @@ fn eventSessionStart(rng: Random, simconf: *const SimConfig, t_clock: f64, user_
     return event_start;
 }
 
-fn eventSessionEnd(rng: Random, simconf: *const SimConfig, t_clock: f64, user_id: Index, session_id: u32, generated_events: u64) Event {
+fn eventSessionEnd(rng: Random, users: *const std.MultiArrayList(User), t_clock: f64, user_id: Index, session_id: u32, generated_events: u64) Event {
     // when will the user go offline
-    const duration = simconf.session_duration.sample(rng);
+    const duration = users.items(.session_duration)[user_id].sample(rng);
     const event_end = Event{
         .time = t_clock + duration,
         .type = .{ .session = .end },
@@ -110,10 +110,10 @@ fn eventCreateWarmup(rng: Random, simconf: *const SimConfig, user_id: Index, gen
     };
 }
 
-fn eventCreatePost(rng: Random, simconf: *const SimConfig, t_clock: f64, user_id: Index, session_id: u32, generated_events: u64) Event {
+fn eventCreatePost(rng: Random, simconf: *const SimConfig, users: *const std.MultiArrayList(User), t_clock: f64, user_id: Index, session_id: u32, generated_events: u64) Event {
     // Schedule the next post creation for this user
     const creation_delay = simconf.creation_delay.sample(rng);
-    const duration_between_creation = simconf.post_inter_creation.sample(rng);
+    const duration_between_creation = users.items(.inter_creation_time)[user_id].sample(rng);
 
     const new_post = Event{
         .time = t_clock + duration_between_creation + creation_delay,
@@ -194,16 +194,7 @@ fn stageOne(
 
         switch (current_event.type) {
             .create => {
-                // Read from the dynamic user slice
-                const max_posts_reached: bool = if (graph.users.items(.max_posts)[current_uid]) |max_posts_user|
-                    max_posts_user <= graph.users.items(.num_posts)[current_uid]
-                else
-                    false;
 
-                if (max_posts_reached) {
-                    metrics.dropped_events += 1;
-                    continue;
-                }
 
                 const new_post_id = metrics.post_count;
 
@@ -218,24 +209,21 @@ fn stageOne(
                 try queue.add(gpa, propagate);
                 metrics.generated_events += 1;
 
-                if (simconf.trace_to_file) {
-                    const c = TraceCreate{ .time = t_clock.*, .user_id = current_uid, .post_id = metrics.post_count, .event_id = metrics.processed_events, .gen_id = gen_id };
-                    const bytes = std.mem.asBytes(&c);
-                    try create_trace.writeAll(bytes);
-                }
+                const c = TraceCreate{ .time = t_clock.*, .user_id = current_uid, .post_id = metrics.post_count, .event_id = metrics.processed_events, .gen_id = gen_id };
+                const bytes = std.mem.asBytes(&c);
+                try create_trace.writeAll(bytes);
+
                 metrics.post_count += 1;
 
-                const new_post = eventCreatePost(rng, simconf, t_clock.*, current_uid, graph.users.items(.session_gen)[current_uid], metrics.generated_events);
+                const new_post = eventCreatePost(rng, simconf, &graph.users, t_clock.*, current_uid, graph.users.items(.session_gen)[current_uid], metrics.generated_events);
                 try queue.add(gpa, new_post);
                 metrics.generated_events += 1;
             },
             .propagate => |post_id| {
                 try propagatePost(gpa, graph, t_clock.*, current_uid, post_id);
-                if (simconf.trace_to_file) {
-                    const p = TracePropagation{ .time = t_clock.*, .type = post_id, .user_id = current_uid, .event_id = metrics.processed_events, .gen_id = gen_id };
-                    const bytes = std.mem.asBytes(&p);
-                    try propagate_trace.writeAll(bytes);
-                }
+                const p = TracePropagation{ .time = t_clock.*, .type = post_id, .user_id = current_uid, .event_id = metrics.processed_events, .gen_id = gen_id };
+                const bytes = std.mem.asBytes(&p);
+                try propagate_trace.writeAll(bytes);
             },
             else => unreachable,
         }
@@ -263,7 +251,7 @@ pub fn initSessions(
         if (r < simconf.offline_startup_ratio) { // user starts offline
             graph.users.items(.is_online)[uid] = false;
 
-            const event_start = eventSessionStart(rng, simconf, t_clock, @intCast(uid), 0, metrics.generated_events);
+            const event_start = eventSessionStart(rng, &graph.users, t_clock, @intCast(uid), 0, metrics.generated_events);
             try queue.add(gpa, event_start);
             metrics.generated_events += 1;
         } else { // users starts online
@@ -272,15 +260,13 @@ pub fn initSessions(
             metrics.total_sessions += 1;
 
             // as user starts online, we log this into the session trace, it's both a generation and a processed event
-            if (simconf.trace_to_file) {
-                const s = TraceSession{ .time = t_clock, .type = .start, .user_id = @intCast(uid), .event_id = metrics.processed_events, .gen_id = metrics.generated_events };
-                const bytes = std.mem.asBytes(&s);
-                try session_trace.writeAll(bytes);
-            }
+            const s = TraceSession{ .time = t_clock, .type = .start, .user_id = @intCast(uid), .event_id = metrics.processed_events, .gen_id = metrics.generated_events };
+            const bytes = std.mem.asBytes(&s);
+            try session_trace.writeAll(bytes);
             metrics.*.generated_events += 1;
             metrics.*.processed_events += 1;
 
-            const event_end = eventSessionEnd(rng, simconf, t_clock, @intCast(uid), 0, metrics.generated_events);
+            const event_end = eventSessionEnd(rng, &graph.users, t_clock, @intCast(uid), 0, metrics.generated_events);
             try queue.add(gpa, event_end);
             metrics.*.generated_events += 1;
         }
@@ -327,14 +313,8 @@ pub fn simulate(gpa: Allocator, arena: Allocator, rng: Random, simconf: *const S
             .create => {
                 const is_event_stale: bool = current_event.session_gen != graph.users.items(.session_gen)[current_uid];
                 const is_user_online: bool = graph.users.items(.is_online)[current_uid];
-                // check if user can have max post
-                const max_posts_reached = if (graph.users.items(.max_posts)[current_uid]) |max_post_user|
-                    max_post_user <= graph.users.items(.num_posts)[current_uid]
-                else
-                    false;
-
                 // Note: if an event is stale the user cannot be online. it's just a double check
-                if (is_event_stale or max_posts_reached or !is_user_online) {
+                if (is_event_stale or !is_user_online) {
                     metrics.dropped_events += 1;
                     continue;
                 }
@@ -351,15 +331,13 @@ pub fn simulate(gpa: Allocator, arena: Allocator, rng: Random, simconf: *const S
                 try queue.add(gpa, propagate);
                 metrics.generated_events += 1;
 
-                if (simconf.trace_to_file) {
-                    const c = TraceCreate{ .time = t_clock, .user_id = current_uid, .post_id = new_post_id, .event_id = metrics.processed_events, .gen_id = gen_id };
-                    const bytes = std.mem.asBytes(&c);
-                    try create_trace.writeAll(bytes);
-                }
+                const c = TraceCreate{ .time = t_clock, .user_id = current_uid, .post_id = new_post_id, .event_id = metrics.processed_events, .gen_id = gen_id };
+                const bytes = std.mem.asBytes(&c);
+                try create_trace.writeAll(bytes);
                 metrics.post_count += 1;
                 metrics.processed_events += 1;
 
-                const new_post = eventCreatePost(rng, simconf, t_clock, current_uid, graph.users.items(.session_gen)[current_uid], metrics.generated_events);
+                const new_post = eventCreatePost(rng, simconf, &graph.users, t_clock, current_uid, graph.users.items(.session_gen)[current_uid], metrics.generated_events);
                 try queue.add(gpa, new_post);
                 metrics.generated_events += 1;
             },
@@ -372,11 +350,9 @@ pub fn simulate(gpa: Allocator, arena: Allocator, rng: Random, simconf: *const S
                     continue;
                 }
 
-                if (simconf.trace_to_file) {
-                    const s = TraceSession{ .time = t_clock, .type = ssn, .user_id = current_uid, .event_id = metrics.processed_events, .gen_id = gen_id };
-                    const bytes = std.mem.asBytes(&s);
-                    try session_trace.writeAll(bytes);
-                }
+                const s = TraceSession{ .time = t_clock, .type = ssn, .user_id = current_uid, .event_id = metrics.processed_events, .gen_id = gen_id };
+                const bytes = std.mem.asBytes(&s);
+                try session_trace.writeAll(bytes);
 
                 switch (ssn) {
                     .start => {
@@ -390,11 +366,11 @@ pub fn simulate(gpa: Allocator, arena: Allocator, rng: Random, simconf: *const S
                         try queue.add(gpa, first_action);
                         metrics.generated_events += 1;
 
-                        const new_post = eventCreatePost(rng, simconf, t_clock, current_uid, graph.users.items(.session_gen)[current_uid], metrics.generated_events);
+                        const new_post = eventCreatePost(rng, simconf, &graph.users, t_clock, current_uid, graph.users.items(.session_gen)[current_uid], metrics.generated_events);
                         try queue.add(gpa, new_post);
                         metrics.generated_events += 1;
 
-                        const end_session = eventSessionEnd(rng, simconf, t_clock, current_uid, graph.users.items(.session_gen)[current_uid], metrics.generated_events);
+                        const end_session = eventSessionEnd(rng, &graph.users, t_clock, current_uid, graph.users.items(.session_gen)[current_uid], metrics.generated_events);
                         try queue.add(gpa, end_session);
                         metrics.generated_events += 1;
                     },
@@ -405,7 +381,7 @@ pub fn simulate(gpa: Allocator, arena: Allocator, rng: Random, simconf: *const S
                         metrics.total_online_time += (t_clock - graph.users.items(.session_start_time)[current_uid]);
                         metrics.max_duration_ends += 1;
 
-                        const start_session = eventSessionStart(rng, simconf, t_clock, current_uid, graph.users.items(.session_gen)[current_uid], metrics.generated_events);
+                        const start_session = eventSessionStart(rng, &graph.users, t_clock, current_uid, graph.users.items(.session_gen)[current_uid], metrics.generated_events);
                         try queue.add(gpa, start_session);
                         metrics.generated_events += 1;
 
@@ -438,11 +414,9 @@ pub fn simulate(gpa: Allocator, arena: Allocator, rng: Random, simconf: *const S
                     }
 
                     if (post_id) |pid| {
-                        if (simconf.trace_to_file) {
-                            const a = TraceAction{ .time = t_clock, .type = act, .user_id = current_uid, .post_id = pid, .event_id = metrics.processed_events, .gen_id = gen_id };
-                            const bytes = std.mem.asBytes(&a);
-                            try action_trace.writeAll(bytes);
-                        }
+                        const a = TraceAction{ .time = t_clock, .type = act, .user_id = current_uid, .post_id = pid, .event_id = metrics.processed_events, .gen_id = gen_id };
+                        const bytes = std.mem.asBytes(&a);
+                        try action_trace.writeAll(bytes);
 
                         // Always mark as seen (diagnostic: counts every exposure)
                         graph.user_seen_post.set(current_uid, pid);
@@ -482,13 +456,11 @@ pub fn simulate(gpa: Allocator, arena: Allocator, rng: Random, simconf: *const S
                     metrics.empty_timeline_ends += 1;
                     graph.users.items(.session_gen)[current_uid] += 1;
 
-                    if (simconf.trace_to_file) {
-                        const s = TraceSession{ .time = t_clock, .type = .end, .user_id = current_uid, .event_id = metrics.processed_events, .gen_id = gen_id };
-                        const bytes = std.mem.asBytes(&s);
-                        try session_trace.writeAll(bytes);
-                    }
+                    const s = TraceSession{ .time = t_clock, .type = .end, .user_id = current_uid, .event_id = metrics.processed_events, .gen_id = gen_id };
+                    const bytes = std.mem.asBytes(&s);
+                    try session_trace.writeAll(bytes);
 
-                    const bored_start = eventSessionStart(rng, simconf, t_clock, current_uid, graph.users.items(.session_gen)[current_uid], metrics.generated_events);
+                    const bored_start = eventSessionStart(rng, &graph.users, t_clock, current_uid, graph.users.items(.session_gen)[current_uid], metrics.generated_events);
                     try queue.add(gpa, bored_start);
                     metrics.generated_events += 1;
                     // no need to nuke the timeline, it's already empty
@@ -498,11 +470,9 @@ pub fn simulate(gpa: Allocator, arena: Allocator, rng: Random, simconf: *const S
 
             .propagate => |post_id| {
                 try propagatePost(gpa, graph, t_clock, current_uid, post_id);
-                if (simconf.trace_to_file) {
-                    const p = TracePropagation{ .time = t_clock, .type = post_id, .user_id = current_uid, .event_id = metrics.processed_events, .gen_id = gen_id };
-                    const bytes = std.mem.asBytes(&p);
-                    try propagate_trace.writeAll(bytes);
-                }
+                const p = TracePropagation{ .time = t_clock, .type = post_id, .user_id = current_uid, .event_id = metrics.processed_events, .gen_id = gen_id };
+                const bytes = std.mem.asBytes(&p);
+                try propagate_trace.writeAll(bytes);
                 metrics.processed_events += 1;
             },
         }

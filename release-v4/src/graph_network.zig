@@ -29,6 +29,23 @@ const Precision = @import("config.zig").Precision;
 
 const NetworkJson = @import("json_loading.zig").NetworkJson;
 
+fn fillPareto(io: std.Io, filename: []const u8, shape_buff: []f64, scale_buff: []f64) !void {
+    var buf: [16 * 10000]u8 = undefined; // file is 10K observations. Per line 6 + 1 + 5 + 1 < 16, therefore 16*10000
+    const contents = try std.Io.Dir.readFile(std.Io.Dir.cwd(), io, filename, &buf);
+    var tok = std.mem.tokenizeSequence(u8, contents, "\n");
+    var index: usize = 0;
+    while (tok.next()) |line| {
+        var values = std.mem.tokenizeAny(u8, line, " \t");
+
+        const shape_str = values.next() orelse continue;
+        const scale_str = values.next() orelse continue;
+
+        shape_buff[index] = try std.fmt.parseFloat(f64, shape_str);
+        scale_buff[index] = try std.fmt.parseFloat(f64, scale_str);
+        index += 1;
+    }
+}
+
 /// Static Network Graph that means:
 /// 1. No new users will be added to the network.
 /// 2. No new posts will be added to the network.
@@ -41,17 +58,44 @@ pub const Topology = struct {
     user_seen_post: PagedBitSet(16), // N-to-M matrix: user was exposed to post (diagnostic, counts all impressions)
     user_interacted_post: PagedBitSet(16), // N-to-M matrix: user interacted with post (like/repost/own) — desensitization gate
 
-    pub fn create(gpa: Allocator, arena: Allocator, parsed_network: NetworkJson) !Topology {
+    pub fn create(io: std.Io, gpa: Allocator, arena: Allocator, rng: std.Random, parsed_network: NetworkJson) !Topology {
         // Converteix les coses de la network json en Static Network Graph
         var users: MultiArrayList(User) = try .initCapacity(arena, parsed_network.users.len);
 
+        const sample_size = 10000;
+        var session_length_scale: [sample_size]f64 = undefined;
+        var session_length_shape: [sample_size]f64 = undefined;
+        try fillPareto(io, "params/session_duration_params.txt", &session_length_shape, &session_length_scale);
+
+        var session_gap_scale: [sample_size]f64 = undefined;
+        var session_gap_shape: [sample_size]f64 = undefined;
+        try fillPareto(io, "params/inter_session_params.txt", &session_gap_shape, &session_gap_scale);
+
+        var creation_scale: [sample_size]f64 = undefined;
+        var creation_shape: [sample_size]f64 = undefined;
+        try fillPareto(io, "params/inter_creation_params.txt", &creation_shape, &creation_scale);
+
         for (parsed_network.users) |user| { // ParsedUser
-            const cat: Categorical(Precision, Action) = try .init(arena, user.policy, user.actions);
+
+            const u_session_length = rng.uintLessThan(usize, sample_size);
+            const shape_session_length = session_length_shape[u_session_length];
+            const scale_session_length = session_length_scale[u_session_length];
+
+            const u_session_gap = rng.uintLessThan(usize, sample_size);
+            const shape_session_gap = session_gap_shape[u_session_gap];
+            const scale_session_gap = session_gap_scale[u_session_gap];
+
+            const u_creation = rng.uintLessThan(usize, sample_size);
+            const shape_creation = creation_shape[u_creation];
+            const scale_creation = creation_scale[u_creation];
+            // pick a random number for all of the three lists
             const u = User{
                 .id = user.id,
                 .follower_start = 0,
-                .max_posts = user.max_posts,
-                .policy = cat,
+
+                .session_duration = .init(shape_session_length, scale_session_length),
+                .inter_session_time = .init(shape_session_gap, scale_session_gap),
+                .inter_creation_time = .init(shape_creation, scale_creation),
             };
             users.appendAssumeCapacity(u);
         }

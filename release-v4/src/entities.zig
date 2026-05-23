@@ -1,9 +1,9 @@
 const std = @import("std");
 
 const Heap = @import("heap").Heap;
-const dist = @import("distributions");
+const stats = @import("distributions");
 
-const Categorical = dist.Categorical;
+const Pareto = stats.Pareto;
 
 const config = @import("config.zig");
 
@@ -17,13 +17,17 @@ pub const Index: type = u32;
 pub const User = struct {
     id: Index,
     follower_start: Index,
-    policy: Categorical(Precision, Action),
-    max_posts: ?u32,
 
     is_online: bool = false,
-    session_start_time: f64 = 0.0,
+
     session_gen: u32 = 0,
+
+    session_duration: Pareto(f64),
+    inter_session_time: Pareto(f64),
+    inter_creation_time: Pareto(f64),
+
     num_posts: u32 = 0,
+    session_start_time: f64 = 0.0,
 };
 
 /// Post of the simulation

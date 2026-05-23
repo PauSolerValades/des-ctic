@@ -28,10 +28,9 @@ const Arg = argz.Argument;
 const ParseErrors = argz.ParseErrors;
 
 const def = .{
-    .name = "v3",
-    .description = "BSKY sim",
+    .name = "v4",
+    .description = "Bsky sim",
     .required = .{
-        Arg([]const u8, "config", "Configuration file for the simulation"),
         Arg([]const u8, "data", "Data file containing the network definition"),
     },
 };
@@ -58,18 +57,11 @@ pub fn main(init: std.process.Init) !void {
         std.process.exit(0);
     };
 
-    // const parsed_config = try loader.loadJson(arena, init.io, args.config, SimConfig);
-    const parsed_config = loader.loadJson(arena, init.io, args.config, SimConfig) catch |err| {
-        try stderr.print("Error parsing config JSON file: {any}", .{err});
-        try stderr.flush();
-        std.process.exit(0);
-    };
-    defer parsed_config.deinit();
-    const config = parsed_config.value;
-    _ = config.isValid(); // not used for now
-
     var arena_json: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
     const data_alloc = arena_json.allocator();
+
+    const config = try SimConfig.calibrate(gpa);
+    defer config.deinit(gpa);
 
     const startTimeLoadData = Io.Timestamp.now(init.io, .real);
     // const loaded_data = try loader.loadJson(arena, init.io, args.data, loader.NetworkJson);
@@ -83,8 +75,17 @@ pub fn main(init: std.process.Init) !void {
     try stdout.print("Time Elapsed Loading Data: {d} ms\n", .{elapsedTimeLoadData.toMilliseconds()});
     try stdout.flush();
 
+    const seed = if (config.seed) |s| s else blk: {
+        var os_seed: u64 = undefined;
+        init.io.random(std.mem.asBytes(&os_seed));
+        break :blk os_seed;
+    };
+
+    var prng = Random.DefaultPrng.init(seed);
+    const rng = prng.random();
+
     const startTimeWireData = Io.Timestamp.now(init.io, .real);
-    var graph: gn.Topology = try .create(gpa, arena, loaded_data.value);
+    var graph: gn.Topology = try .create(init.io, gpa, arena, rng, loaded_data.value);
     defer graph.delete(gpa, arena);
     const elapsedTimeWireData = startTimeWireData.untilNow(init.io, .real);
 
@@ -96,16 +97,7 @@ pub fn main(init: std.process.Init) !void {
     try stdout.print("Time Elapsed Wiring Data: {d} ms\n", .{elapsedTimeWireData.toMilliseconds()});
     try stdout.flush();
 
-    const seed = if (config.seed) |s| s else blk: {
-        var os_seed: u64 = undefined;
-        init.io.random(std.mem.asBytes(&os_seed));
-        break :blk os_seed;
-    };
-
-    var prng = Random.DefaultPrng.init(seed);
-    const rng = prng.random();
-
-    try stdout.print("Loaded configuration from {s}\n", .{args.config});
+    try stdout.writeAll("Loaded configuration\n");
     try stdout.print("{f}\n", .{config});
     try stdout.flush();
 
@@ -145,85 +137,21 @@ pub fn main(init: std.process.Init) !void {
     var create_buffer: [64 * 1024]u8 = undefined;
     var propagation_buffer: [64 * 1024]u8 = undefined;
 
-    const action_writer = blk: {
-        if (config.trace_to_file) {
-            const action_file = try cwd.createFile(init.io, action_path, .{ .read = false });
-            var action_file_writer = action_file.writer(init.io, &action_buffer);
-            break :blk &action_file_writer.interface;
-        } else {
-            var action_discard = Io.Writer.Discarding.init(&.{});
-            break :blk &action_discard.writer;
-        }
-    };
+    const action_file = try cwd.createFile(init.io, action_path, .{ .read = false });
+    var action_file_writer = action_file.writer(init.io, &action_buffer);
+    const action_writer = &action_file_writer.interface;
 
-    // // action_writer
-    // var action_file = if (config.trace_to_file)
-    //     try cwd.createFile(init.io, action_path, .{ .read = false })
-    // else
-    //     undefined;
-    // var action_file_writer = if (config.trace_to_file)
-    //     action_file.writer(init.io, &action_buffer)
-    // else
-    //     undefined;
-    // var action_discard = if (!config.trace_to_file)
-    //     std.Io.Writer.Discarding.init(&.{})
-    // else
-    //     undefined;
-    //
-    // const actions_writer: *Io.Writer = if (config.trace_to_file)
-    //     &action_file_writer.interface
-    // else
-    //     &action_discard.writer;
-    //
-    // session_writer
-    var session_file = if (config.trace_to_file)
-        try cwd.createFile(init.io, session_path, .{ .read = false })
-    else
-        undefined;
-    var session_file_writer = if (config.trace_to_file)
-        session_file.writer(init.io, &session_buffer)
-    else
-        undefined;
-    var session_discard = if (!config.trace_to_file)
-        std.Io.Writer.Discarding.init(&.{})
-    else
-        undefined;
+    const session_file = try cwd.createFile(init.io, session_path, .{ .read = false });
+    var session_file_writer = session_file.writer(init.io, &session_buffer);
+    const session_writer = &session_file_writer.interface;
 
-    const session_writer: *Io.Writer = if (config.trace_to_file)
-        &session_file_writer.interface
-    else
-        &session_discard.writer;
+    const create_file = try cwd.createFile(init.io, create_path, .{ .read = false });
+    var create_file_writer = create_file.writer(init.io, &create_buffer);
+    const create_writer = &create_file_writer.interface;
 
-    // create_writer
-    var create_file = if (config.trace_to_file)
-        try cwd.createFile(init.io, create_path, .{ .read = false })
-    else
-        undefined;
-    var create_file_writer = if (config.trace_to_file)
-        create_file.writer(init.io, &create_buffer)
-    else
-        undefined;
-    var create_discard = if (!config.trace_to_file)
-        std.Io.Writer.Discarding.init(&.{})
-    else
-        undefined;
-
-    const create_writer: *Io.Writer = if (config.trace_to_file) &create_file_writer.interface else &create_discard.writer;
-
-    var prop_file = if (config.trace_to_file)
-        try cwd.createFile(init.io, prop_path, .{ .read = false })
-    else
-        undefined;
-    var prop_file_writer = if (config.trace_to_file)
-        prop_file.writer(init.io, &propagation_buffer)
-    else
-        undefined;
-    var prop_discard = if (!config.trace_to_file)
-        std.Io.Writer.Discarding.init(&.{})
-    else
-        undefined;
-
-    const prop_writer: *Io.Writer = if (config.trace_to_file) &prop_file_writer.interface else &prop_discard.writer;
+    const prop_file = try cwd.createFile(init.io, prop_path, .{ .read = false });
+    var prop_file_writer = prop_file.writer(init.io, &propagation_buffer);
+    const prop_writer = &prop_file_writer.interface;
 
     const startTime = Io.Timestamp.now(init.io, .real);
     const results = try simulation.simulate(
@@ -243,13 +171,11 @@ pub fn main(init: std.process.Init) !void {
     try stdout.print("Time Elapsed: {d} ms\n", .{elapsedTime.toMilliseconds()});
     try stdout.flush();
 
-    if (config.trace_to_file) {
-        try stdout.writeAll("Converting the traces into JSONL\n");
-        try bytesToJsonl(init.io, entities.TraceAction, action_path, "results/action_trace.jsonl");
-        try bytesToJsonl(init.io, entities.TraceSession, session_path, "results/session_trace.jsonl");
-        try bytesToJsonl(init.io, entities.TraceCreate, create_path, "results/create_trace.jsonl");
-        try bytesToJsonl(init.io, entities.TracePropagation, prop_path, "results/propagate_trace.jsonl");
-    }
+    try stdout.writeAll("Converting the traces into JSONL\n");
+    try bytesToJsonl(init.io, entities.TraceAction, action_path, "results/action_trace.jsonl");
+    try bytesToJsonl(init.io, entities.TraceSession, session_path, "results/session_trace.jsonl");
+    try bytesToJsonl(init.io, entities.TraceCreate, create_path, "results/create_trace.jsonl");
+    try bytesToJsonl(init.io, entities.TracePropagation, prop_path, "results/propagate_trace.jsonl");
 
     try stdout.flush();
 }
