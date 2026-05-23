@@ -1,0 +1,1414 @@
+const std = @import("std");
+
+const Random = std.Random;
+const ArrayList = std.ArrayList;
+const Io = std.Io;
+
+const stats = @import("distributions");
+const assert = std.debug.assert;
+
+const main = @import("main.zig");
+const entities = @import("entities.zig");
+
+const ContDist = stats.ContinuousDistribution;
+const DiscDist = stats.DiscreteDistribution;
+const Uniform = stats.Uniform;
+
+const is_v1 = std.mem.eql(u8, "v1", @import("build").build);
+
+// accepts just f64 and f32 due to rng implementaiton
+pub const Precision = f32;
+
+pub const SimConfig = struct {
+    seed: ?u64,
+    // time marks
+    horizon: f64,                           // max duration of the simulation
+    duration: f64,                          // Duration of the simulation
+    warmup_time: f64,                       // time when warmup ends
+    // user related actions
+    user_policy: DiscDist(Precision, entities.Action),      // probability of available actions of the user
+    user_inter_action: ContDist(Precision),                 // time between a user two actions
+    // to init posts
+    warmup_post_inter_creation: ContDist(f64),           // time of the post created in the simulation 
+    post_inter_creation: ContDist(f64),
+    // delays on posts transmissions
+    propagation_delay: ContDist(f64),           // time between an action over a post and showing up followers timeline
+    interaction_delay: ContDist(f64),           // time between 
+    // session configuration                                        
+    offline_startup_ratio: Precision,             // which proportion of the users start on vacation
+    session_duration: ContDist(f64),           // duration of the current session
+    user_inter_session: ContDist(f64),         // duration of time between sessions
+
+    creation_delay: ContDist(f64),
+    
+    // misc config
+    trace_to_file: bool,                        // true is trace is written to a file. False not
+
+    pub fn isValid(self: @This()) bool {
+        assert(self.horizon > 0);
+        assert(self.duration > 0);
+        assert(self.warmup_time > 0);
+        assert(self.warmup_time + self.duration <= self.horizon);
+
+        // check that the Distribution picked to generate the posts is not able to 
+        // generate a post later than warmup_time
+        return true;
+    }
+
+    pub fn format(
+        self: @This(),
+        writer: *std.Io.Writer,
+    ) !void {
+        try writer.writeAll("\n");
+        try writer.writeAll("+--------------------------+\n");
+        try writer.print("| SIMULATION CONFIGURATION |\n", .{});
+        try writer.writeAll("+--------------------------+\n");
+       
+        try writer.writeAll("--- Warm up ---\n");
+        try writer.print("{s: <24}:  {f}\n", .{ "Time between post creation", self.warmup_post_inter_creation});
+        
+        try writer.writeAll("--- User Actions Config ---\n");
+        try writer.print("{s: <24}:  {f}\n", .{ "User policy", self.user_policy});
+        try writer.print("{s: <24}:  {f}\n", .{ "Time between actions", self.user_inter_action});
+        try writer.print("{s: <24}:  {f}\n", .{ "Time between post creation", self.post_inter_creation});
+       
+        
+        try writer.writeAll("--- Post Propagation Delays ---\n");
+        try writer.print("{s: <24}:  {f}\n", .{ "Propagation delay", self.propagation_delay});
+        try writer.print("{s: <24}:  {f}\n", .{ "Interaction delay", self.interaction_delay});
+        try writer.print("{s: <24}:  {f}\n", .{ "Creation delay", self.creation_delay});
+        
+        try writer.writeAll("--- User Sessions (Vacations) ---\n");
+        try writer.print("{s: <24}:  {d}\n", .{ "% starting offline", self.offline_startup_ratio});
+        try writer.print("{s: <24}:  {f}\n", .{ "Online Duration", self.session_duration});
+        try writer.print("{s: <24}:  {f}\n", .{ "Time between Vacations", self.user_inter_session});
+        try writer.writeAll("---------------------------------\n");
+        try writer.print("{s: <24}:  {d: <23.2}\n", .{ "Warm-up (Time)", self.warmup_time});
+        try writer.print("{s: <24}:  {d: <23.2}\n", .{ "Duration", self.duration });
+        try writer.print("{s: <24}:  {d: <23.2}\n", .{ "Horizon (Time)", self.horizon });
+    }
+};
+
+
+pub const SimResults = struct {
+    duration: f64,
+    processed_events: u64,
+    generated_events: u64,
+    dropped_events: u64,
+
+    posts_at_warmup: f64,
+
+    total_impressions: u64,      // Every time a post is popped from a timeline
+    total_likes: u64,
+    total_reposts: u64,
+    total_interactions: u64,     // Sum of likes, replies, reposts, quotes
+    total_ignored: u64,          // Events where action was .nothing
+
+    avg_impressions_per_user: f64,
+    engagement_rate: f64,        // interactions / impressions
+    avg_backlog: f64,            // How many unread posts remain in heaps at horizon
+    variance_backlog: f64,
+    ci_backlog: f64,
+    
+    total_sessions: u64,         // number of sessions for all the users
+    avg_session_length: f64,     // mean length of sessionsa
+    avg_post_per_session: f64,  // mean posts per sessions
+    timeline_drain_ratio: f64,
+    
+    pub fn format(
+        self: @This(),
+        writer: *std.Io.Writer,
+    ) !void {
+        
+        try writer.writeAll("\n+---------------------------------+\n");
+        try writer.print("| SOCIAL NETWORK SIMULATION STATS |\n", .{});
+        try writer.writeAll("+---------------------------------+\n");
+        try writer.print("{s: <28}: {d:.4}\n", .{ "Simulation Duration (T)", self.duration });
+        try writer.print("{s: <28}: {d}\n", .{ "Total Events Processed", self.processed_events });
+        try writer.print("{s: <28}: {d}\n", .{ "Total Events Generated", self.generated_events});
+        try writer.print("{s: <28}: {d}\n", .{ "Total Events Dropped", self.dropped_events});
+        try writer.writeAll("------ Warmup -----\n");
+        try writer.print("{s: <28}: {d}\n", .{ "% of posts created", self.posts_at_warmup});
+        try writer.writeAll("------- Global Post Metrics -------\n");
+        try writer.print("{s: <28}: {d}\n", .{ "Total Likes", self.total_likes });
+        try writer.print("{s: <28}: {d}\n", .{ "Total Reposts", self.total_reposts });
+        try writer.print("{s: <28}: {d}\n", .{ "Total Impressions", self.total_impressions });
+        try writer.print("{s: <28}: {d}\n", .{ "Total Interactions", self.total_interactions });
+        try writer.print("{s: <28}: {d}\n", .{ "Total Ignored", self.total_ignored });
+        try writer.writeAll("------------- Averages ------------\n");
+        try writer.print("{s: <28}: {d:.4}\n", .{ "Avg Impressions / User", self.avg_impressions_per_user });
+        try writer.print("{s: <28}: {d:.2}%\n", .{ "Global Engagement Rate", self.engagement_rate * 100.0 });
+        try writer.print("{s: <28}: {d:.2}\n", .{ "Avg Unread Backlog / User", self.avg_backlog });
+        try writer.print("{s: <28}: {d:.2}\n", .{ "Var Unread Backlog", self.variance_backlog });
+        try writer.print("{s: <28}: {d:.2}\n", .{ "CI Unread Backlog", self.ci_backlog });
+        try writer.writeAll("------------- Sessions ------------\n");
+        try writer.print("{s: <28}: {d}\n", .{ "Total Sessions (all users)", self.total_sessions });
+        try writer.print("{s: <28}: {d:.4}\n", .{ "Avg session length", self.avg_session_length });
+        try writer.print("{s: <28}: {d:.4}\n", .{ "Avg posts / User ", self.avg_post_per_session });
+        try writer.print("{s: <28}: {d:.2}\n", .{ "Timeline Drain Ratio", self.timeline_drain_ratio });
+        try writer.writeAll("+---------------------------------+\n");
+    }
+};
+
+pub const Stats = struct {
+    mean: f64,
+    variance: f64,
+    ci: f64,
+
+    pub fn calculateFromData(data: []f64) Stats {
+        var sum: f64 = 0.0;
+        for (data) |v| sum += v;
+        const mean = sum / @as(f64, @floatFromInt(data.len));
+
+        var sum_sq_diff: f64 = 0.0;
+        for (data) |v| {
+            const diff = v - mean;
+            sum_sq_diff += diff * diff;
+        }
+
+        const variance = sum_sq_diff / @as(f64, @floatFromInt(data.len - 1));
+        const std_dev = std.math.sqrt(variance);
+
+        const margin_error = 1.96 * (std_dev / std.math.sqrt(@as(f64, @floatFromInt(data.len))));
+
+        return Stats{ .mean = mean, .variance = variance, .ci = margin_error };
+    }
+};
+const std = @import("std");
+
+const Heap = @import("heap").Heap;
+const dist = @import("distributions");
+
+const Categorical = dist.Categorical;
+
+const config = @import("config.zig");
+
+const Order = std.math.Order;
+const ArrayList = std.ArrayList;
+
+const Precision = config.Precision;
+
+pub const Index: type = u32;
+
+pub const User = struct {
+    id: Index,
+    follower_start: Index,
+    follower_count: Index,
+    policy: Categorical(Precision, Action),
+    max_posts: ?u32,
+
+    is_online: bool = false,
+    session_start_time: f64 = 0.0,
+    session_gen: u64 = 0,
+    num_posts: u32 = 0,
+};
+
+/// Post of the simulation
+pub const Post = struct {
+    id: Index,
+    author: Index,
+};
+
+/// Actions performable over a post by a user in the simulation
+/// - ignore: nothing
+/// - like: adds one to interaction. No behaviour on the simu
+/// - repost: propagates to the followers of the user timelines
+/// - create: fetches a post from the simulation.
+pub const Action = enum { ignore, like, repost };
+/// Session states
+/// - start: makes the user go back online, see posts and interact with them
+/// - end: makes the user go offline: should nuke it's timeline
+pub const Session = enum { start, end };
+
+/// For RCAPS and RCOPS. Having this is much better for code clarity
+/// and to not make weird stuff happen with the switch
+pub const EventType = union(enum) {
+    action: Action,
+    session: Session,
+    create: void,
+    propagate: Index,
+};
+
+/// Simulation Event for Reverse-Chronological Simulations
+pub const Event = struct {
+    time: f64, // when will the action be due
+    type: EventType, //
+    user_id: Index, // user id
+    session_gen: u64, // in which session from the user_id does this event belong
+    id: u64, // which action is it
+};
+
+/// Heap function to compare between events. It access the .time field
+/// found on both events. This is used in the global queue.
+pub fn compareEvent(context: void, a: Event, b: Event) Order {
+    _ = context;
+    return std.math.order(a.time, b.time);
+}
+
+/// Event to contain in the user own timeline. Contains the minimum information
+/// to get it transmitted everywhere
+pub const TimelineEvent = struct {
+    time: f64,
+    post_id: Index,
+};
+
+/// Heap comparison function for user timelines in Reverse-Chronological simulations
+pub fn compareTimelineEvent(context: void, a: TimelineEvent, b: TimelineEvent) Order {
+    _ = context;
+    return std.math.order(b.time, a.time);
+}
+
+/// Auxiliar struct for trace writing. Contains all
+/// the entities that need to be written on the trace
+pub const TraceAction = struct {
+    time: f64,
+    type: Action,
+    user_id: Index,
+    post_id: Index,
+    event_id: u64,
+    gen_id: u64,
+};
+
+pub const TraceCreate = struct {
+    time: f64,
+    post_id: Index,
+    user_id: Index,
+    event_id: u64,
+    gen_id: u64,
+};
+
+pub const TraceSession = struct {
+    time: f64,
+    type: Session,
+    user_id: Index,
+    event_id: u64,
+    gen_id: u64,
+};
+
+pub const TracePropagation = struct {
+    time: f64,
+    type: Index,
+    user_id: Index,
+    event_id: u64,
+    gen_id: u64,
+};
+const std = @import("std");
+const ArrayList = std.ArrayList;
+const Allocator = std.mem.Allocator;
+const DynamicBitSet = std.DynamicBitSetUnmanaged;
+const MultiArrayList = std.MultiArrayList;
+const Random = std.Random;
+
+const build = @import("build");
+
+const ds = @import("ds");
+
+const Heap = ds.Heap;
+const SMAList = ds.SegmentedMultiArrayList;
+const PagedBitSet = ds.PagedBitSet;
+
+const dist = @import("distributions");
+const Categorical = dist.Categorical;
+
+const entities = @import("entities.zig");
+const TimelineEvent = entities.TimelineEvent;
+const User = entities.User;
+const Post = entities.Post;
+const Index = entities.Index;
+const Action = entities.Action;
+
+const TimelineHeap = Heap(entities.TimelineEvent, void, entities.compareTimelineEvent);
+
+const Precision = @import("config.zig").Precision;
+
+const NetworkJson = @import("json_loading.zig").NetworkJson;
+
+/// Static Network Graph that means:
+/// 1. No new users will be added to the network.
+/// 2. No new posts will be added to the network.
+/// 3. No new follows between users will be added to the network
+pub const Topology = struct {
+    users: MultiArrayList(User), // Contains all users of the simulations
+    followers: []Index, // Compressed Sparse Row, aka Static Adjacency Array
+    timelines: []TimelineHeap, // Timelines for every user. Optimaly, we should use FixedBufferAllocator
+    posts: SMAList(Post, 16), // uwu
+    user_seen_post: PagedBitSet(16), // N-to-M user seen post matrix as a 2D bitset, amazingly fast
+
+    pub fn create(gpa: Allocator, arena: Allocator, parsed_network: NetworkJson) !Topology {
+        // Converteix les coses de la network json en Static Network Graph
+        var users: MultiArrayList(User) = try .initCapacity(arena, parsed_network.users.len);
+
+        for (parsed_network.users) |user| { // ParsedUser
+            const cat: Categorical(Precision, Action) = try .init(arena, user.policy, user.actions);
+            const u = User{
+                .id = user.id,
+                .follower_start = 0,
+                .follower_count = 0,
+                .max_posts = user.max_posts,
+                .policy = cat,
+            };
+            users.appendAssumeCapacity(u);
+        }
+
+        var followers: []Index = try arena.alloc(Index, parsed_network.followers.len);
+
+        // temporary list of arraylists to hold the followers:
+        var tmp_followers: []ArrayList(Index) = try gpa.alloc(ArrayList(Index), parsed_network.users.len);
+        for (0..tmp_followers.len) |i| {
+            tmp_followers[i] = .empty;
+        }
+        defer {
+            for (tmp_followers) |*f| {
+                f.deinit(gpa);
+            }
+            gpa.free(tmp_followers);
+        }
+
+        for (parsed_network.followers) |edge| {
+            const follower_id = edge.follower_id;
+            const followed_id = edge.followed_id;
+            try tmp_followers[followed_id].append(gpa, follower_id);
+        }
+
+        var acc: usize = 0;
+        for (tmp_followers, 0..) |follow, i| {
+            const follower_count = follow.items.len;
+            users.items(.follower_start)[i] = @intCast(acc);
+            users.items(.follower_count)[i] = @intCast(follower_count);
+            @memcpy(followers[acc .. acc + follower_count], follow.items);
+            acc += follower_count;
+        }
+
+        var timelines: []TimelineHeap = try gpa.alloc(TimelineHeap, parsed_network.users.len);
+
+        for (0..timelines.len) |i| {
+            timelines[i] = .empty;
+        }
+
+        const posts: SMAList(Post, 16) = .empty;
+        // User Homogeneity, max_post is the same per every user
+        const matrix: PagedBitSet(16) = try .initPages(arena, parsed_network.users.len, 16);
+
+        return .{
+            .users = users,
+            .followers = followers,
+            .timelines = timelines,
+            .posts = posts,
+            .user_seen_post = matrix,
+        };
+    }
+
+    pub fn delete(self: *Topology, gpa: Allocator, arena: Allocator) void {
+        self.users.deinit(arena);
+        arena.free(self.followers);
+
+        for (self.timelines) |timeline| {
+            timeline.deinit(gpa);
+        }
+        gpa.free(self.timelines);
+
+        self.user_seen_post.deinit(arena);
+        self.posts.deinit(arena);
+    }
+
+    /// Old create, when posts where in the data generation.
+    /// This will probably be good to keep arround if i implement checkpoint
+    pub fn createGraphFromCheckpoint(gpa: Allocator, parsed_network: NetworkJson) !Topology {
+        // Converteix les coses de la network json en Static Network Graph
+        var users: MultiArrayList(User) = try .initCapacity(gpa, parsed_network.users.len);
+        var posts: MultiArrayList(Post) = try .initCapacity(gpa, parsed_network.posts.len);
+
+        for (parsed_network.users) |user| { // ParsedUser
+            const cat: Categorical(Precision, Action) = try .init(gpa, user.policy, user.actions);
+            const u = User{ .id = user.id, .follower_start = 0, .follower_count = 0, .policy = cat };
+            users.appendAssumeCapacity(u);
+        }
+
+        for (parsed_network.posts) |post| {
+            const p = Post{ .id = post.id, .author = 0 };
+            posts.appendAssumeCapacity(p);
+        }
+
+        var followers: []Index = try gpa.alloc(Index, parsed_network.followers.len);
+
+        // temporary list of arraylists to hold the followers:
+        var tmp_followers: []ArrayList(Index) = try gpa.alloc(ArrayList(Index), parsed_network.users.len);
+        for (0..tmp_followers.len) |i| {
+            tmp_followers[i] = .empty;
+        }
+        defer {
+            for (tmp_followers) |*f| {
+                f.deinit(gpa);
+            }
+            gpa.free(tmp_followers);
+        }
+
+        for (parsed_network.followers) |edge| {
+            const follower_id = edge.follower_id;
+            const followed_id = edge.followed_id;
+            try tmp_followers[follower_id].append(gpa, followed_id);
+        }
+
+        var acc: usize = 0;
+        for (tmp_followers, 0..) |follow, i| {
+            const follower_count = follow.items.len;
+            users.items(.follower_start)[i] = @intCast(acc);
+            users.items(.follower_count)[i] = @intCast(follower_count);
+            @memcpy(followers[acc .. acc + follower_count], follow.items);
+            acc += follower_count;
+        }
+
+        var timelines: []TimelineHeap = try gpa.alloc(TimelineHeap, parsed_network.users.len);
+
+        for (0..timelines.len) |i| {
+            timelines[i] = .empty;
+        }
+
+        const total_bits = parsed_network.users.len * parsed_network.posts.len;
+        var matrix = try DynamicBitSet.initEmpty(gpa, total_bits);
+
+        var owned_posts: []ArrayList(Index) = try gpa.alloc(ArrayList(Index), parsed_network.users.len);
+        for (0..owned_posts.len) |i| {
+            owned_posts[i] = .empty;
+        }
+        defer {
+            for (owned_posts) |*f| {
+                f.deinit(gpa);
+            }
+        }
+
+        for (parsed_network.user_owns_post) |relation| {
+            const flat_index = (relation.user_id * parsed_network.posts.len) + relation.post_id;
+            matrix.set(flat_index);
+
+            posts.items(.author)[relation.post_id] = relation.user_id;
+
+            try owned_posts[relation.user_id].append(gpa, relation.post_id);
+
+            // this is now not possible, as the post time will be generated by the user
+            // const pe = entities.TimelineEvent { .post_id = relation.post_id, .time = parsed_network.posts[relation.post_id].time };
+            // try timelines[relation.user_id].add(gpa, pe);
+        }
+
+        var user_post_list = try gpa.alloc([]Index, owned_posts.len);
+        for (0..owned_posts.len) |i| {
+            const user_posts_owned = try gpa.alloc(Index, owned_posts[i].items.len);
+            @memcpy(user_posts_owned[0..owned_posts[i].items.len], owned_posts[i].items);
+            user_post_list[i] = user_posts_owned;
+        }
+
+        return .{
+            .users = users,
+            .posts = posts,
+            .followers = followers,
+            .timelines = timelines,
+            .user_seen_post = matrix,
+        };
+    }
+};
+const std = @import("std");
+
+const Allocator = std.mem.Allocator;
+const Io = std.Io;
+const json = std.json;
+
+const Heap = @import("heap").Heap;
+const dist = @import("distributions");
+
+const DiscDist = dist.DiscreteDistribution;
+
+const Categorical = dist.Categorical;
+
+const structs = @import("config.zig");
+const entities = @import("entities.zig");
+const Precision = structs.Precision;
+
+const User = entities.User;
+const Post = entities.Post;
+const TimelineEvent = entities.TimelineEvent;
+const Index = entities.Index;
+
+const compareTimelineEvent = entities.compareTimelineEvent;
+
+pub const NetworkJson = struct {
+    users: []ParsedUser,
+    followers: []ParsedFollow,
+};
+
+const ParsedUser = struct {
+    id: Index,
+    actions: []entities.Action,
+    policy: []Precision,
+    max_posts: ?u32,
+};
+
+const ParsedPost = struct {
+    id: Index,
+    //time: f64,
+};
+
+const ParsedFollow = struct {
+    follower_id: Index,
+    followed_id: Index,
+};
+
+const ParsedOwns = struct {
+    user_id: Index,
+    post_id: Index,
+};
+
+
+
+pub fn loadJson(gpa: Allocator, io: Io, path: []const u8, comptime T: type) !json.Parsed(T) {
+    const content = try std.Io.Dir.cwd().readFileAlloc(io, path, gpa, .unlimited);
+    defer gpa.free(content);
+    // We use .ignore_unknown_fields = true so comments or extra metadata in JSON don't crash it
+    const options = std.json.ParseOptions{ .ignore_unknown_fields = true };
+    
+    // parsed_result holds the data AND the arena allocator used for strings/slices in the JSON
+    const parsed_result = try std.json.parseFromSlice(T, gpa, content, options);
+    
+    return parsed_result;
+}
+
+
+const std = @import("std");
+const json = std.json;
+const Allocator = std.mem.Allocator;
+const ArrayList = std.ArrayList;
+const Random = std.Random;
+const eql = std.mem.eql;
+const Io = std.Io;
+
+const argz = @import("eazy_args");
+
+const structs = @import("config.zig");
+
+const simulation = @import("simulation.zig");
+
+const loader = @import("json_loading.zig");
+const gn = @import("graph_network.zig");
+const entities = @import("entities.zig");
+
+const Distribution = structs.Distribution;
+const SimConfig = structs.SimConfig;
+const SimResults = structs.SimResults;
+
+const User = simulation.User;
+const Post = simulation.Post;
+const TimelineEvent = simulation.TimelineEvent;
+
+const Arg = argz.Argument;
+const ParseErrors = argz.ParseErrors;
+
+const def = .{
+    .name = "v3",
+    .description = "BSKY sim",
+    .required = .{
+        Arg([]const u8, "config", "Configuration file for the simulation"),
+        Arg([]const u8, "data", "Data file containing the network definition"),
+    },
+};
+
+pub fn main(init: std.process.Init) !void {
+    var buffer: [1024]u8 = undefined;
+    var stdout_writer = Io.File.stdout().writer(init.io, &buffer);
+    const stdout = &stdout_writer.interface;
+
+    var bufferr: [1024]u8 = undefined;
+    var stderr_writer = Io.File.stderr().writer(init.io, &bufferr);
+    const stderr = &stderr_writer.interface;
+
+    const arena = init.arena.allocator();
+    const gpa = init.gpa;
+    const cwd = Io.Dir.cwd();
+
+    var iter = init.minimal.args.iterate();
+    const args = argz.parseArgsPosix(def, &iter, stdout, stderr) catch |err| {
+        switch (err) {
+            ParseErrors.HelpShown => try stdout.flush(),
+            else => try stderr.flush(),
+        }
+        std.process.exit(0);
+    };
+
+    // const parsed_config = try loader.loadJson(arena, init.io, args.config, SimConfig);
+    const parsed_config = loader.loadJson(arena, init.io, args.config, SimConfig) catch |err| {
+        try stderr.print("Error parsing config JSON file: {any}", .{err});
+        try stderr.flush();
+        std.process.exit(0);
+    };
+    defer parsed_config.deinit();
+    const config = parsed_config.value;
+    _ = config.isValid(); // not used for now
+
+    var arena_json: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    const data_alloc = arena_json.allocator();
+
+    const startTimeLoadData = Io.Timestamp.now(init.io, .real);
+    // const loaded_data = try loader.loadJson(arena, init.io, args.data, loader.NetworkJson);
+    const loaded_data = loader.loadJson(data_alloc, init.io, args.data, loader.NetworkJson) catch |err| {
+        try stderr.print("Error parsing data JSON: {any}", .{err});
+        try stderr.flush();
+        std.process.exit(0);
+    };
+    const elapsedTimeLoadData = startTimeLoadData.untilNow(init.io, .real);
+
+    try stdout.print("Time Elapsed Loading Data: {d} ms\n", .{elapsedTimeLoadData.toMilliseconds()});
+    try stdout.flush();
+
+    const startTimeWireData = Io.Timestamp.now(init.io, .real);
+    var graph: gn.Topology = try .create(gpa, arena, loaded_data.value);
+    defer graph.delete(gpa, arena);
+    const elapsedTimeWireData = startTimeWireData.untilNow(init.io, .real);
+
+    // the lifetime of this data ends here
+    var loaded_data_mut = loaded_data;
+    loaded_data_mut.deinit();
+    arena_json.deinit();
+
+    try stdout.print("Time Elapsed Wiring Data: {d} ms\n", .{elapsedTimeWireData.toMilliseconds()});
+    try stdout.flush();
+
+    const seed = if (config.seed) |s| s else blk: {
+        var os_seed: u64 = undefined;
+        init.io.random(std.mem.asBytes(&os_seed));
+        break :blk os_seed;
+    };
+
+    var prng = Random.DefaultPrng.init(seed);
+    const rng = prng.random();
+
+    try stdout.print("Loaded configuration from {s}\n", .{args.config});
+    try stdout.print("{f}\n", .{config});
+    try stdout.flush();
+
+    try stdout.writeAll("Running the simulation once\n");
+    try stdout.flush();
+
+    // create the results folder
+    // cwd.access(init.io, "results", .{}) catch |err| switch (err) {
+    //     error.FileNotFound => try cwd.createDir(init.io, "results", .{ .mode = Oo755} ),
+    //     else => return err,
+    // };
+
+    // const timestamp = Io.Clock.real.now(init.io);
+    // buffers to hold the formatted file paths to avoid dynamic memory
+    // var trace_path_buffer: [256]u8 = undefined;
+    // const traca_path = try std.fmt.bufPrint(&traca_path_buffer, "traca_{d}.txt", .{timestamp});
+
+    const action_name = "action_trace.bin";
+    const session_name = "session_trace.bin";
+    const create_name = "create_trace.bin";
+    const propagation_name = "propagation_trace.bin";
+
+    var action_path_buf: [std.fs.max_path_bytes]u8 = undefined;
+    const action_path = try std.fmt.bufPrint(&action_path_buf, "results/{s}", .{action_name});
+
+    var session_path_buf: [std.fs.max_path_bytes]u8 = undefined;
+    const session_path = try std.fmt.bufPrint(&session_path_buf, "results/{s}", .{session_name});
+
+    var create_path_buf: [std.fs.max_path_bytes]u8 = undefined;
+    const create_path = try std.fmt.bufPrint(&create_path_buf, "results/{s}", .{create_name});
+
+    var prop_path_buf: [std.fs.max_path_bytes]u8 = undefined;
+    const prop_path = try std.fmt.bufPrint(&prop_path_buf, "results/{s}", .{propagation_name});
+
+    var action_buffer: [64 * 1024]u8 = undefined;
+    var session_buffer: [64 * 1024]u8 = undefined;
+    var create_buffer: [64 * 1024]u8 = undefined;
+    var propagation_buffer: [64 * 1024]u8 = undefined;
+
+    const action_writer = blk: {
+        if (config.trace_to_file) {
+            const action_file = try cwd.createFile(init.io, action_path, .{ .read = false });
+            var action_file_writer = action_file.writer(init.io, &action_buffer);
+            break :blk &action_file_writer.interface;
+        } else {
+            var action_discard = Io.Writer.Discarding.init(&.{});
+            break :blk &action_discard.writer;
+        }
+    };
+
+    // // action_writer
+    // var action_file = if (config.trace_to_file)
+    //     try cwd.createFile(init.io, action_path, .{ .read = false })
+    // else
+    //     undefined;
+    // var action_file_writer = if (config.trace_to_file)
+    //     action_file.writer(init.io, &action_buffer)
+    // else
+    //     undefined;
+    // var action_discard = if (!config.trace_to_file)
+    //     std.Io.Writer.Discarding.init(&.{})
+    // else
+    //     undefined;
+    //
+    // const actions_writer: *Io.Writer = if (config.trace_to_file)
+    //     &action_file_writer.interface
+    // else
+    //     &action_discard.writer;
+    //
+    // session_writer
+    var session_file = if (config.trace_to_file)
+        try cwd.createFile(init.io, session_path, .{ .read = false })
+    else
+        undefined;
+    var session_file_writer = if (config.trace_to_file)
+        session_file.writer(init.io, &session_buffer)
+    else
+        undefined;
+    var session_discard = if (!config.trace_to_file)
+        std.Io.Writer.Discarding.init(&.{})
+    else
+        undefined;
+
+    const session_writer: *Io.Writer = if (config.trace_to_file)
+        &session_file_writer.interface
+    else
+        &session_discard.writer;
+
+    // create_writer
+    var create_file = if (config.trace_to_file)
+        try cwd.createFile(init.io, create_path, .{ .read = false })
+    else
+        undefined;
+    var create_file_writer = if (config.trace_to_file)
+        create_file.writer(init.io, &create_buffer)
+    else
+        undefined;
+    var create_discard = if (!config.trace_to_file)
+        std.Io.Writer.Discarding.init(&.{})
+    else
+        undefined;
+
+    const create_writer: *Io.Writer = if (config.trace_to_file) &create_file_writer.interface else &create_discard.writer;
+
+    var prop_file = if (config.trace_to_file)
+        try cwd.createFile(init.io, prop_path, .{ .read = false })
+    else
+        undefined;
+    var prop_file_writer = if (config.trace_to_file)
+        prop_file.writer(init.io, &propagation_buffer)
+    else
+        undefined;
+    var prop_discard = if (!config.trace_to_file)
+        std.Io.Writer.Discarding.init(&.{})
+    else
+        undefined;
+
+    const prop_writer: *Io.Writer = if (config.trace_to_file) &prop_file_writer.interface else &prop_discard.writer;
+
+    const startTime = Io.Timestamp.now(init.io, .real);
+    const results = try simulation.simulate(
+        gpa,
+        arena,
+        rng,
+        config,
+        &graph,
+        action_writer,
+        session_writer,
+        create_writer,
+        prop_writer,
+    );
+    const elapsedTime = startTime.untilNow(init.io, .real);
+
+    try stdout.print("{f}\n", .{results});
+    try stdout.print("Time Elapsed: {d} ms\n", .{elapsedTime.toMilliseconds()});
+    try stdout.flush();
+
+    if (config.trace_to_file) {
+        try stdout.writeAll("Converting the traces into JSONL\n");
+        try bytesToJsonl(init.io, entities.TraceAction, action_path, "results/action_trace.jsonl");
+        try bytesToJsonl(init.io, entities.TraceSession, session_path, "results/session_trace.jsonl");
+        try bytesToJsonl(init.io, entities.TraceCreate, create_path, "results/create_trace.jsonl");
+        try bytesToJsonl(init.io, entities.TracePropagation, prop_path, "results/propagate_trace.jsonl");
+    }
+
+    try stdout.flush();
+}
+
+/// this probably could be much more prettier if I passed the Io.Writer/Io.Reader by parameter, and I
+/// could even reuse the buffers... but dunno, at least this is pretty efficient :D
+fn bytesToJsonl(io: Io, comptime T: type, read_file: []const u8, write_file: []const u8) !void {
+    const n = @sizeOf(T);
+
+    var jsonl_buffer: [4 * 1024]u8 = undefined;
+    const jsonl_file = try Io.Dir.cwd().createFile(io, write_file, .{ .read = false });
+    var jsonl_file_writer = jsonl_file.writer(io, &jsonl_buffer);
+    const writer = &jsonl_file_writer.interface;
+
+    if (Io.Dir.cwd().openFile(io, read_file, .{})) |file| {
+        var buf: [4 * 1024]u8 = undefined;
+        var reader: Io.File.Reader = file.reader(io, &buf);
+        const ri = &reader.interface;
+
+        while (true) {
+            const bytes = ri.take(n) catch |err| {
+                switch (err) {
+                    error.EndOfStream => break,
+                    error.ReadFailed => return reader.err.?,
+                }
+            };
+
+            const event = std.mem.bytesAsValue(T, bytes);
+            try std.json.Stringify.value(event, .{}, writer);
+            try writer.writeAll("\n");
+        }
+    } else |err| switch (err) {
+        error.FileNotFound, error.AccessDenied => {
+            std.debug.print("unable to open file: {}\n", .{err});
+        },
+        else => |e| return e, // don't continue; rather, bomb out
+    }
+
+    try writer.flush();
+}
+const std = @import("std");
+
+const Allocator = std.mem.Allocator;
+const ArrayList = std.ArrayList;
+const Random = std.Random;
+const Io = std.Io;
+const Order = std.math.Order;
+
+const Heap = @import("ds").Heap;
+
+const dist = @import("distributions");
+
+const config = @import("config.zig");
+const entities = @import("entities.zig");
+const gn = @import("graph_network.zig");
+
+const SimResults = config.SimResults;
+const SimConfig = config.SimConfig;
+const Topology = gn.Topology;
+
+const Precision = config.Precision;
+
+const Event = entities.Event;
+const Action = entities.Action;
+const Session = entities.Session;
+const User = entities.User;
+const Post = entities.Post;
+const TraceAction = entities.TraceAction;
+const TraceSession = entities.TraceSession;
+const TraceCreate = entities.TraceCreate;
+const TracePropagation = entities.TracePropagation;
+
+const TimelineEvent = entities.TimelineEvent;
+const compareTimelineEvent = entities.compareTimelineEvent;
+const Index = entities.Index;
+
+const EventQueue: type = Heap(Event, void, entities.compareEvent);
+
+pub const SimMetrics = struct {
+    processed_events: u64 = 0,
+    generated_events: u64 = 0,
+    dropped_events: u64 = 0,
+
+    post_count: u32 = 0,
+
+    impressions: u64 = 0,
+    reposts: u64 = 0,
+    likes: u64 = 0,
+    ignored: u64 = 0,
+
+    total_sessions: u64 = 0,
+    total_online_time: f64 = 0.0,
+    empty_timeline_ends: u64 = 0,
+    max_duration_ends: u64 = 0,
+};
+
+fn eventAction(rng: Random, simconf: SimConfig, t_clock: f64, user_id: Index, user_session_gen: u64, generated_events: u64) Event {
+    const action: Action = simconf.user_policy.sample(rng);
+
+    const event_time = simconf.user_inter_action.sample(rng);
+    const interaction_delay = simconf.interaction_delay.sample(rng);
+
+    const event = Event{
+        .time = t_clock + event_time + interaction_delay,
+        .type = .{ .action = action },
+        .user_id = user_id,
+        .id = generated_events,
+        .session_gen = user_session_gen,
+    };
+
+    return event;
+}
+
+fn eventSessionStart(rng: Random, simconf: SimConfig, t_clock: f64, user_id: Index, session_id: u64, generated_events: u64) Event {
+    // when will the user go online
+    const offline_duration = simconf.user_inter_session.sample(rng);
+    const event_start = Event{
+        .time = t_clock + offline_duration,
+        .type = .{ .session = .start },
+        .user_id = user_id,
+        .id = generated_events,
+        .session_gen = session_id,
+    };
+    return event_start;
+}
+
+fn eventSessionEnd(rng: Random, simconf: SimConfig, t_clock: f64, user_id: Index, session_id: u64, generated_events: u64) Event {
+    // when will the user go offline
+    const duration = simconf.session_duration.sample(rng);
+    const event_end = Event{
+        .time = t_clock + duration,
+        .type = .{ .session = .end },
+        .user_id = user_id,
+        .id = generated_events,
+        .session_gen = session_id,
+    };
+    return event_end;
+}
+
+fn eventCreateWarmup(rng: Random, simconf: SimConfig, user_id: Index, generated_events: u64) Event {
+    const t_creation_decision = simconf.warmup_post_inter_creation.sample(rng);
+
+    const creation_delay = simconf.creation_delay.sample(rng);
+    return Event{
+        .time = t_creation_decision + creation_delay,
+        .type = .{ .create = {} },
+        .user_id = user_id,
+        .id = generated_events,
+        .session_gen = 0,
+    };
+}
+
+fn eventCreatePost(rng: Random, simconf: SimConfig, t_clock: f64, user_id: Index, session_id: u64, generated_events: u64) Event {
+    // Schedule the next post creation for this user
+    const creation_delay = simconf.creation_delay.sample(rng);
+    const duration_between_creation = simconf.warmup_post_inter_creation.sample(rng);
+
+    const new_post = Event{
+        .time = t_clock + duration_between_creation + creation_delay,
+        .type = .{ .create = {} },
+        .user_id = user_id,
+        .id = generated_events,
+        .session_gen = session_id,
+    };
+    return new_post;
+}
+
+pub fn eventPropagate(rng: Random, simconf: SimConfig, t_clock: f64, current_uid: Index, post_id: Index, generated_events: u64) Event {
+    // Sample the delay ONCE for the broadcast
+    const delay = simconf.propagation_delay.sample(rng);
+
+    return Event{
+        .time = t_clock + delay,
+        .type = .{ .propagate = post_id },
+        .user_id = current_uid, // the author
+        .id = generated_events,
+        .session_gen = 0, // System event, ignores sessions
+    };
+}
+
+const Unif = dist.Uniform(Precision);
+
+fn propagatePost(gpa: Allocator, graph: *Topology, t_clock: f64, user_id: Index, post_id: Index) !void {
+    const start_idx = graph.users.items(.follower_start)[user_id];
+    const count = graph.users.items(.follower_count)[user_id];
+    const followers = graph.followers[start_idx .. start_idx + count];
+
+    const tl_event = TimelineEvent{
+        .time = t_clock,
+        .post_id = post_id,
+    };
+
+    for (followers) |fid| {
+        try graph.timelines[fid].add(gpa, tl_event);
+    }
+}
+
+fn stageOne(
+    gpa: Allocator,
+    arena: Allocator,
+    rng: Random,
+    simconf: SimConfig,
+    graph: *Topology,
+    queue: *EventQueue,
+    metrics: *SimMetrics,
+    t_clock: *f64,
+    create_trace: *Io.Writer,
+    propagate_trace: *Io.Writer,
+) !void {
+
+    // there will be at least one post per user, so we ensure this capacity at the beginng
+    try graph.user_seen_post.ensureItemCapacity(arena, graph.users.len);
+    for (0..graph.users.len) |uid| {
+        graph.user_seen_post.set(uid, metrics.post_count);
+
+        const create_post = eventCreateWarmup(rng, simconf, @intCast(uid), metrics.generated_events);
+        try queue.add(gpa, create_post);
+        metrics.generated_events += 1;
+
+        graph.users.items(.num_posts)[uid] += 1;
+        try graph.posts.append(arena, Post{ .id = metrics.post_count, .author = @intCast(uid) });
+    }
+
+    while (t_clock.* <= simconf.warmup_time and queue.items.len > 0) {
+        const current_event = queue.remove();
+        t_clock.* = current_event.time;
+
+        const current_uid = current_event.user_id;
+        const gen_id = current_event.id;
+
+        switch (current_event.type) {
+            .create => {
+                // Read from the dynamic user slice
+                const max_posts_reached: bool = if (graph.users.items(.max_posts)[current_uid]) |max_posts_user|
+                    max_posts_user <= graph.users.items(.num_posts)[current_uid]
+                else
+                    false;
+
+                if (max_posts_reached) {
+                    metrics.dropped_events += 1;
+                    continue;
+                }
+
+                const new_post_id = metrics.post_count;
+
+                try graph.posts.append(arena, .{ .id = new_post_id, .author = current_uid });
+                try graph.user_seen_post.ensureItemCapacity(arena, new_post_id);
+                graph.user_seen_post.set(current_uid, new_post_id); // this user has seen this post
+
+                const propagate = eventPropagate(rng, simconf, t_clock.*, current_uid, new_post_id, metrics.generated_events);
+                try queue.add(gpa, propagate);
+                metrics.generated_events += 1;
+
+                if (simconf.trace_to_file) {
+                    const c = TraceCreate{ .time = t_clock.*, .user_id = current_uid, .post_id = metrics.post_count, .event_id = metrics.processed_events, .gen_id = gen_id };
+                    const bytes = std.mem.asBytes(&c);
+                    try create_trace.writeAll(bytes);
+                }
+                metrics.post_count += 1;
+
+                const new_post = eventCreatePost(rng, simconf, t_clock.*, current_uid, graph.users.items(.session_gen)[current_uid], metrics.generated_events);
+                try queue.add(gpa, new_post);
+                metrics.generated_events += 1;
+            },
+            .propagate => |post_id| {
+                try propagatePost(gpa, graph, t_clock.*, current_uid, post_id);
+                if (simconf.trace_to_file) {
+                    const p = TracePropagation{ .time = t_clock.*, .type = post_id, .user_id = current_uid, .event_id = metrics.processed_events, .gen_id = gen_id };
+                    const bytes = std.mem.asBytes(&p);
+                    try propagate_trace.writeAll(bytes);
+                }
+            },
+            else => unreachable,
+        }
+        metrics.processed_events += 1; // an event is always processed, there is no continues
+    }
+}
+
+pub fn initSessions(
+    gpa: Allocator,
+    rng: Random,
+    simconf: SimConfig,
+    graph: *Topology,
+    queue: *EventQueue,
+    metrics: *SimMetrics,
+    t_clock: f64,
+    session_trace: *Io.Writer,
+) !void {
+    const unif: Unif = .init(0, 1, dist.Interval.cc);
+
+    for (0..graph.users.len) |uid| {
+        // this is to avoid potential problems :)
+        // graph.timelines[uid].clearRetainingCapacity();
+
+        const r = unif.sample(rng);
+        if (r < simconf.offline_startup_ratio) { // user starts offline
+            graph.users.items(.is_online)[uid] = false;
+
+            const event_start = eventSessionStart(rng, simconf, t_clock, @intCast(uid), 0, metrics.generated_events);
+            try queue.add(gpa, event_start);
+            metrics.generated_events += 1;
+        } else { // users starts online
+            graph.users.items(.is_online)[uid] = true;
+            graph.users.items(.session_start_time)[uid] = t_clock;
+            metrics.total_sessions += 1;
+
+            // as user starts online, we log this into the session trace, it's both a generation and a processed event
+            if (simconf.trace_to_file) {
+                const s = TraceSession{ .time = t_clock, .type = .start, .user_id = @intCast(uid), .event_id = metrics.processed_events, .gen_id = metrics.generated_events };
+                const bytes = std.mem.asBytes(&s);
+                try session_trace.writeAll(bytes);
+            }
+            metrics.*.generated_events += 1;
+            metrics.*.processed_events += 1;
+
+            const event_end = eventSessionEnd(rng, simconf, t_clock, @intCast(uid), 0, metrics.generated_events);
+            try queue.add(gpa, event_end);
+            metrics.*.generated_events += 1;
+        }
+    }
+}
+
+pub fn simulate(gpa: Allocator, arena: Allocator, rng: Random, simconf: SimConfig, graph: *Topology, action_trace: *Io.Writer, session_trace: *Io.Writer, create_trace: *Io.Writer, propagate_trace: *Io.Writer) !SimResults {
+    var t_clock: f64 = 0.0;
+
+    var metrics = SimMetrics{};
+
+    var queue: EventQueue = .empty;
+    defer queue.deinit(gpa);
+
+    // Post generation on init
+    try stageOne(gpa, arena, rng, simconf, graph, &queue, &metrics, &t_clock, create_trace, propagate_trace);
+    // queue.clearRetainingCapacity();
+
+    // decide which users start online or not
+    try initSessions(gpa, rng, simconf, graph, &queue, &metrics, t_clock, session_trace);
+
+    // set online users first action
+    for (0..graph.users.len) |uid| {
+        if (graph.users.items(.is_online)[uid]) {
+            const first_action = eventAction(rng, simconf, t_clock, @intCast(uid), 0, metrics.generated_events);
+            try queue.add(gpa, first_action);
+            metrics.generated_events += 1;
+
+            // const new_post = eventCreatePost(rng, simconf, t_clock, @intCast(uid), 0, graph.users.items(.session_gen)[uid], metrics.generated_events);
+            // try queue.add(gpa, new_post);
+            // metrics.generated_events += 1;
+        }
+    }
+
+    const t_end = @min(simconf.warmup_time + simconf.duration, simconf.horizon);
+    while (t_clock <= t_end and queue.items.len > 0) {
+        const current_event = queue.remove();
+        const current_uid: Index = current_event.user_id;
+        const gen_id = current_event.id;
+        std.debug.assert(current_event.time >= t_clock);
+        t_clock = current_event.time;
+
+        switch (current_event.type) {
+            .create => {
+                const is_event_stale: bool = current_event.session_gen != graph.users.items(.session_gen)[current_uid];
+                const is_user_online: bool = graph.users.items(.is_online)[current_uid];
+                // check if user can have max post
+                const max_posts_reached = if (graph.users.items(.max_posts)[current_uid]) |max_post_user|
+                    max_post_user <= graph.users.items(.num_posts)[current_uid]
+                else
+                    false;
+
+                // Note: if an event is stale the user cannot be online. it's just a double check
+                if (is_event_stale or max_posts_reached or !is_user_online) {
+                    metrics.dropped_events += 1;
+                    continue;
+                }
+                const new_post_id = metrics.post_count;
+
+                graph.users.items(.num_posts)[current_uid] += 1;
+                try graph.user_seen_post.ensureItemCapacity(arena, new_post_id);
+                graph.user_seen_post.set(current_uid, new_post_id); // post is marked as seen by its creator
+
+                const propagate = eventPropagate(rng, simconf, t_clock, current_uid, new_post_id, metrics.generated_events);
+                try queue.add(gpa, propagate);
+                metrics.generated_events += 1;
+
+                if (simconf.trace_to_file) {
+                    const c = TraceCreate{ .time = t_clock, .user_id = current_uid, .post_id = new_post_id, .event_id = metrics.processed_events, .gen_id = gen_id };
+                    const bytes = std.mem.asBytes(&c);
+                    try create_trace.writeAll(bytes);
+                }
+                metrics.post_count += 1;
+                metrics.processed_events += 1;
+
+                const new_post = eventCreatePost(rng, simconf, t_clock, current_uid, graph.users.items(.session_gen)[current_uid], metrics.generated_events);
+                try queue.add(gpa, new_post);
+                metrics.generated_events += 1;
+            },
+
+            .session => |ssn| {
+                // a session can be stale due to the catch up mechanic.
+                const is_event_stale: bool = current_event.session_gen != graph.users.items(.session_gen)[current_uid];
+                if (ssn == .end and (!graph.users.items(.is_online)[current_uid] or is_event_stale)) {
+                    metrics.dropped_events += 1;
+                    continue;
+                }
+
+                if (simconf.trace_to_file) {
+                    const s = TraceSession{ .time = t_clock, .type = ssn, .user_id = current_uid, .event_id = metrics.processed_events, .gen_id = gen_id };
+                    const bytes = std.mem.asBytes(&s);
+                    try session_trace.writeAll(bytes);
+                }
+
+                switch (ssn) {
+                    .start => {
+                        graph.users.items(.is_online)[current_uid] = true;
+                        graph.users.items(.session_gen)[current_uid] += 1;
+
+                        graph.users.items(.session_start_time)[current_uid] = t_clock; // Record start time
+                        metrics.total_sessions += 1;
+
+                        const first_action = eventAction(rng, simconf, t_clock, current_uid, graph.users.items(.session_gen)[current_uid], metrics.generated_events);
+                        try queue.add(gpa, first_action);
+                        metrics.generated_events += 1;
+
+                        const new_post = eventCreatePost(rng, simconf, t_clock, current_uid, graph.users.items(.session_gen)[current_uid], metrics.generated_events);
+                        try queue.add(gpa, new_post);
+                        metrics.generated_events += 1;
+
+                        const end_session = eventSessionEnd(rng, simconf, t_clock, current_uid, graph.users.items(.session_gen)[current_uid], metrics.generated_events);
+                        try queue.add(gpa, end_session);
+                        metrics.generated_events += 1;
+                    },
+                    .end => {
+                        // schedule users wake up time
+                        graph.users.items(.is_online)[current_uid] = false;
+                        // metrics
+                        metrics.total_online_time += (t_clock - graph.users.items(.session_start_time)[current_uid]);
+                        metrics.max_duration_ends += 1;
+
+                        const start_session = eventSessionStart(rng, simconf, t_clock, current_uid, graph.users.items(.session_gen)[current_uid], metrics.generated_events);
+                        try queue.add(gpa, start_session);
+                        metrics.generated_events += 1;
+
+                        // post non seen when session finished will get nuked
+                        graph.timelines[current_uid].clearRetainingCapacity();
+                    },
+                }
+                metrics.processed_events += 1; // both .end and .start do not skip the loop, so its okay to put it here:
+            },
+
+            .action => |act| {
+                const is_event_stale: bool = current_event.session_gen != graph.users.items(.session_gen)[current_uid];
+                const is_user_online: bool = graph.users.items(.is_online)[current_uid];
+
+                if (is_event_stale or !is_user_online) {
+                    metrics.dropped_events += 1;
+                    continue;
+                }
+
+                if (graph.timelines[current_uid].items.len != 0) {
+                    // now it's safe to pop it and use it
+                    const current_post = graph.timelines[current_uid].remove();
+                    const post_id: Index = current_post.post_id;
+
+                    // user CANNOT see previous posts. Shouldn't happen here anyway. this is a _safeguard_
+                    if (graph.user_seen_post.isSet(current_uid, post_id)) {
+                        const next_action = eventAction(rng, simconf, t_clock, current_uid, graph.users.items(.session_gen)[current_uid], metrics.generated_events);
+                        try queue.add(gpa, next_action);
+                        metrics.generated_events += 1;
+                        //metrics.processed_events += 1;
+                        continue;
+                    }
+
+                    if (simconf.trace_to_file) {
+                        const a = TraceAction{ .time = t_clock, .type = act, .user_id = current_uid, .post_id = post_id, .event_id = metrics.processed_events, .gen_id = gen_id };
+                        const bytes = std.mem.asBytes(&a);
+                        try action_trace.writeAll(bytes);
+                    }
+
+                    graph.user_seen_post.set(current_uid, post_id);
+                    metrics.impressions += 1;
+
+                    switch (act) {
+                        .repost => {
+                            const propagate = eventPropagate(rng, simconf, t_clock, current_uid, post_id, metrics.generated_events);
+                            try queue.add(gpa, propagate);
+                            metrics.generated_events += 1;
+                            metrics.reposts += 1;
+                        },
+                        .like => metrics.likes += 1,
+                        .ignore => metrics.ignored += 1,
+                    }
+                    metrics.processed_events += 1;
+
+                    const event = eventAction(rng, simconf, t_clock, current_uid, graph.users.items(.session_gen)[current_uid], metrics.generated_events);
+                    try queue.add(gpa, event);
+                    metrics.generated_events += 1;
+                } else {
+                    graph.users.items(.is_online)[current_uid] = false;
+
+                    metrics.total_online_time += (t_clock - graph.users.items(.session_start_time)[current_uid]);
+                    metrics.empty_timeline_ends += 1;
+                    graph.users.items(.session_gen)[current_uid] += 1;
+
+                    if (simconf.trace_to_file) {
+                        const s = TraceSession{ .time = t_clock, .type = .end, .user_id = current_uid, .event_id = metrics.processed_events, .gen_id = gen_id };
+                        const bytes = std.mem.asBytes(&s);
+                        try session_trace.writeAll(bytes);
+                    }
+
+                    const bored_start = eventSessionStart(rng, simconf, t_clock, current_uid, graph.users.items(.session_gen)[current_uid], metrics.generated_events);
+                    try queue.add(gpa, bored_start);
+                    metrics.generated_events += 1;
+                    // no need to nuke the timeline, it's already empty
+                    metrics.processed_events += 1;
+                }
+            },
+
+            .propagate => |post_id| {
+                try propagatePost(gpa, graph, t_clock, current_uid, post_id);
+                if (simconf.trace_to_file) {
+                    const p = TracePropagation{ .time = t_clock, .type = post_id, .user_id = current_uid, .event_id = metrics.processed_events, .gen_id = gen_id };
+                    const bytes = std.mem.asBytes(&p);
+                    try propagate_trace.writeAll(bytes);
+                }
+                metrics.processed_events += 1;
+            },
+        }
+    }
+
+    try action_trace.flush();
+    try session_trace.flush();
+    try create_trace.flush();
+    try propagate_trace.flush();
+
+    var total_backlog: usize = 0;
+    for (graph.timelines) |*timeline| {
+        const v = timeline.items.len;
+        total_backlog += v;
+    }
+
+    const mean: f64 = @as(f64, @floatFromInt(total_backlog)) / @as(f64, @floatFromInt(graph.users.len));
+
+    var sum_sq_diff: f64 = 0.0;
+    for (graph.timelines) |*timeline| {
+        const v: f64 = @floatFromInt(timeline.items.len);
+        const diff = v - mean;
+        sum_sq_diff += diff * diff;
+    }
+
+    const backlog_variance = sum_sq_diff / @as(f64, @floatFromInt(graph.users.len - 1));
+    const std_dev = std.math.sqrt(backlog_variance);
+
+    const margin_error = 1.96 * (std_dev / std.math.sqrt(@as(f64, @floatFromInt(graph.users.len))));
+    const interactions = metrics.likes + metrics.reposts;
+
+    const result = SimResults{
+        .processed_events = metrics.processed_events,
+        .generated_events = metrics.generated_events,
+        .dropped_events = metrics.dropped_events,
+        .duration = t_clock,
+        .total_likes = metrics.likes,
+        .total_reposts = metrics.reposts,
+        .total_interactions = interactions,
+        .total_ignored = metrics.ignored,
+        .total_impressions = metrics.impressions,
+        .avg_impressions_per_user = @as(f64, @floatFromInt(metrics.impressions)) / @as(f64, @floatFromInt(graph.users.len)),
+        .engagement_rate = @as(f64, @floatFromInt(interactions)) / @as(f64, @floatFromInt(metrics.impressions)),
+        .avg_backlog = mean,
+        .variance_backlog = backlog_variance,
+        .ci_backlog = margin_error,
+        .total_sessions = metrics.total_sessions,
+        .avg_session_length = metrics.total_online_time / @as(f64, @floatFromInt(metrics.total_sessions)),
+        .avg_post_per_session = @as(f64, @floatFromInt(metrics.impressions)) / @as(f64, @floatFromInt(metrics.total_sessions)),
+        .timeline_drain_ratio = @as(f64, @floatFromInt(metrics.empty_timeline_ends)) / @as(f64, @floatFromInt(metrics.total_sessions)),
+        .posts_at_warmup = @as(f64, @floatFromInt(metrics.post_count)) / @as(f64, @floatFromInt(graph.user_seen_post.len)),
+    };
+
+    return result;
+}
+
+fn writeToTrace(comptime T: type, writer: *Io.Writer, event: T) !void {
+    switch (T) {
+        TraceAction, TraceSession, TraceCreate, TracePropagation => {},
+        else => @compileError("Unsupported trace type passed"),
+    }
+
+    try std.json.Stringify.value(event, .{}, writer);
+    try writer.writeAll("\n");
+}

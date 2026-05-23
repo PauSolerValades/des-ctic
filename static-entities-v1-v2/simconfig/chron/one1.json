@@ -1,0 +1,33 @@
+{
+  "user_policy": {
+    "categorical": {
+      "weights": [0.50, 0.20, 0.15, 0.15 ],
+      "data": [ "ignore", "like", "repost", "create" ]
+    }
+  },
+  "post_time_creation": {
+    "uniform": {
+      "min": 0,
+      "max": 10000,
+      "interval": "oc"
+    }
+  },
+  "user_inter_action": {
+    "exponential": {
+      "rate": 3
+    }
+  },
+  "propagation_delay": {
+    "constant": {
+      "value": 1
+    }
+  },
+  "interaction_delay": { 
+    "constant": {
+      "value": 1
+    }
+  },
+  "trace_to_file": false,
+  "horizon": 10000,
+  "seed": null 
+}
