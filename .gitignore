@@ -5,7 +5,7 @@ zig-out/
 /build/
 /build-*/
 /docgen_tmp/
-/zig-pkg/
+zig-pkg/
 
 # root data
 /data/
