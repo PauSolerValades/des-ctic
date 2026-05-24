@@ -6,7 +6,7 @@ const Random = std.Random;
 const Io = std.Io;
 const Order = std.math.Order;
 
-const Heap = @import("ds").Heap;
+const DaryHeap = @import("ds").DaryHeap;
 
 const dist = @import("distributions");
 
@@ -34,7 +34,7 @@ const TimelineEvent = entities.TimelineEvent;
 const compareTimelineEvent = entities.compareTimelineEvent;
 const Index = entities.Index;
 
-const EventQueue: type = Heap(Event, void, entities.compareEvent);
+const EventQueue: type = DaryHeap(Event, 8, void, entities.compareEvent);
 
 pub const SimMetrics = struct {
     processed_events: u64 = 0,
@@ -279,6 +279,7 @@ pub fn simulate(gpa: Allocator, arena: Allocator, rng: Random, simconf: *const S
     var metrics = SimMetrics{};
 
     var queue: EventQueue = .empty;
+    try queue.ensureTotalCapacity(gpa, 4 * graph.users.len);
     defer queue.deinit(gpa);
 
     // Post generation on init
@@ -463,8 +464,8 @@ pub fn simulate(gpa: Allocator, arena: Allocator, rng: Random, simconf: *const S
                     const bored_start = eventSessionStart(rng, &graph.users, t_clock, current_uid, graph.users.items(.session_gen)[current_uid], metrics.generated_events);
                     try queue.add(gpa, bored_start);
                     metrics.generated_events += 1;
+                    metrics.processed_events += 1;
                     // no need to nuke the timeline, it's already empty
-                    //metrics.processed_events += 1;
                 }
             },
 

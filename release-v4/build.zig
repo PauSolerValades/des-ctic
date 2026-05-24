@@ -3,8 +3,8 @@ const std = @import("std");
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-    const version = "v3";
-    
+    const version = "release";
+
     const options = b.addOptions();
     options.addOption([]const u8, "build", version);
     const profile = b.option(bool, "profile", "Profile heap operations") orelse false;
@@ -88,10 +88,9 @@ pub fn build(b: *std.Build) !void {
                 .override = .{
                     .custom = try t.zigTriple(b.allocator),
                 },
-                },
-            });
+            },
+        });
 
         release_step.dependOn(&target_output.step);
-
     }
 }

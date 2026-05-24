@@ -7,8 +7,10 @@ zig-out/
 /docgen_tmp/
 zig-pkg/
 
-# root data
-/data/
+# every data
+data/
 
 # traces output
 /results/
+results/
+traces/

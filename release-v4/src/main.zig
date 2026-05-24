@@ -64,12 +64,7 @@ pub fn main(init: std.process.Init) !void {
     defer config.deinit(gpa);
 
     const startTimeLoadData = Io.Timestamp.now(init.io, .real);
-    // const loaded_data = try loader.loadJson(arena, init.io, args.data, loader.NetworkJson);
-    const loaded_data = loader.loadJson(data_alloc, init.io, args.data, loader.NetworkJson) catch |err| {
-        try stderr.print("Error parsing data JSON: {any}", .{err});
-        try stderr.flush();
-        std.process.exit(0);
-    };
+    const sampled_topology = try loader.BinaryGraph.create(init.io, data_alloc, args.data);
     const elapsedTimeLoadData = startTimeLoadData.untilNow(init.io, .real);
 
     try stdout.print("Time Elapsed Loading Data: {d} ms\n", .{elapsedTimeLoadData.toMilliseconds()});
@@ -85,13 +80,13 @@ pub fn main(init: std.process.Init) !void {
     const rng = prng.random();
 
     const startTimeWireData = Io.Timestamp.now(init.io, .real);
-    var graph: gn.Topology = try .create(init.io, gpa, arena, rng, loaded_data.value);
+    var graph: gn.Topology = try .create(init.io, gpa, arena, rng, sampled_topology);
     defer graph.delete(gpa, arena);
     const elapsedTimeWireData = startTimeWireData.untilNow(init.io, .real);
 
     // the lifetime of this data ends here
-    var loaded_data_mut = loaded_data;
-    loaded_data_mut.deinit();
+    var samp_top_var = sampled_topology;
+    samp_top_var.delete(data_alloc);
     arena_json.deinit();
 
     try stdout.print("Time Elapsed Wiring Data: {d} ms\n", .{elapsedTimeWireData.toMilliseconds()});
@@ -121,16 +116,16 @@ pub fn main(init: std.process.Init) !void {
     const propagation_name = "propagation_trace.bin";
 
     var action_path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const action_path = try std.fmt.bufPrint(&action_path_buf, "results/{s}", .{action_name});
+    const action_path = try std.fmt.bufPrint(&action_path_buf, "traces/{s}", .{action_name});
 
     var session_path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const session_path = try std.fmt.bufPrint(&session_path_buf, "results/{s}", .{session_name});
+    const session_path = try std.fmt.bufPrint(&session_path_buf, "traces/{s}", .{session_name});
 
     var create_path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const create_path = try std.fmt.bufPrint(&create_path_buf, "results/{s}", .{create_name});
+    const create_path = try std.fmt.bufPrint(&create_path_buf, "traces/{s}", .{create_name});
 
     var prop_path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const prop_path = try std.fmt.bufPrint(&prop_path_buf, "results/{s}", .{propagation_name});
+    const prop_path = try std.fmt.bufPrint(&prop_path_buf, "traces/{s}", .{propagation_name});
 
     var action_buffer: [64 * 1024]u8 = undefined;
     var session_buffer: [64 * 1024]u8 = undefined;
@@ -172,10 +167,10 @@ pub fn main(init: std.process.Init) !void {
     try stdout.flush();
 
     try stdout.writeAll("Converting the traces into JSONL\n");
-    try bytesToJsonl(init.io, entities.TraceAction, action_path, "results/action_trace.jsonl");
-    try bytesToJsonl(init.io, entities.TraceSession, session_path, "results/session_trace.jsonl");
-    try bytesToJsonl(init.io, entities.TraceCreate, create_path, "results/create_trace.jsonl");
-    try bytesToJsonl(init.io, entities.TracePropagation, prop_path, "results/propagate_trace.jsonl");
+    try bytesToJsonl(init.io, entities.TraceAction, action_path, "traces/action_trace.jsonl");
+    try bytesToJsonl(init.io, entities.TraceSession, session_path, "traces/session_trace.jsonl");
+    try bytesToJsonl(init.io, entities.TraceCreate, create_path, "traces/create_trace.jsonl");
+    try bytesToJsonl(init.io, entities.TracePropagation, prop_path, "traces/propagate_trace.jsonl");
 
     try stdout.flush();
 }
