@@ -16,3 +16,6 @@ results/
 traces/
 /output/
 output/
+
+
+__pycache__/
