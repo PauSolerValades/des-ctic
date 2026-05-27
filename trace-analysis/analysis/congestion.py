@@ -167,19 +167,20 @@ def plot_duration_vs_empty():
     fig, axes = plt.subplots(1, 3, figsize=(12, 5), sharey=True)
     for ax, s in zip(axes, SIZES):
         df = duckdb.sql(f"""
-            SELECT duration, empty_timeline_exit
+            SELECT LN(duration+1) as log_dur, empty_timeline_exit
             FROM '{DATA}/{s}/out_sessions.parquet'
+            USING SAMPLE 100000
         """).df()
-        empty = df[df["empty_timeline_exit"]]["duration"].values
-        nonempty = df[~df["empty_timeline_exit"]]["duration"].values
+        empty = df[df["empty_timeline_exit"]]["log_dur"].values
+        nonempty = df[~df["empty_timeline_exit"]]["log_dur"].values
         ax.boxplot([empty, nonempty], tick_labels=["Empty exit", "Has backlog"],
                    patch_artist=True,
                    boxprops=dict(facecolor="lightcoral"),
                    medianprops=dict(color="black"))
         ax.set_title(f"{NL[s]}")
+        ax.set_ylabel("log(duration+1)" if ax == axes[0] else "")
         ax.grid(True, alpha=0.3, axis="y")
-        if ax == axes[0]: ax.set_ylabel("Duration (ticks)")
-    fig.suptitle("Session duration: empty-exit vs non-empty")
+    fig.suptitle("Session duration (log scale): empty-exit vs non-empty")
     plt.tight_layout()
     fig.savefig(OUTPUT / "s2_duration_vs_empty.png", bbox_inches="tight")
     plt.close()
@@ -246,16 +247,16 @@ def plot_reposters_vs_non():
     fig, axes = plt.subplots(1, 3, figsize=(12, 5), sharey=True)
     for ax, s in zip(axes, SIZES):
         df, _ = _per_user_agg(s)
-        rep = df[df["total_reposts"] > 0]["mean_session_duration"].values
-        non = df[df["total_reposts"] == 0]["mean_session_duration"].values
+        rep = np.log(df[df["total_reposts"] > 0]["mean_session_duration"].values + 1)
+        non = np.log(df[df["total_reposts"] == 0]["mean_session_duration"].values + 1)
         ax.boxplot([non, rep], tick_labels=["Never reposts", "Reposts"],
                    patch_artist=True,
                    boxprops=dict(facecolor="mediumseagreen"),
                    medianprops=dict(color="black"))
         ax.set_title(f"{NL[s]}")
-        if ax == axes[0]: ax.set_ylabel("Mean session duration")
+        if ax == axes[0]: ax.set_ylabel("log(mean_dur+1)")
         ax.grid(True, alpha=0.3, axis="y")
-    fig.suptitle("Session duration: reposters vs non-reposters")
+    fig.suptitle("Per-user mean session duration (log): reposters vs non-reposters")
     plt.tight_layout()
     fig.savefig(OUTPUT / "s2_reposters_vs_non.png", bbox_inches="tight")
     plt.close()

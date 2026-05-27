@@ -74,10 +74,28 @@ Done.
   1M           10,487,978        19.4%           3.3           1107           750
 
   Burstiness & time-to-peak (posts with reposts > 0):
-  Size         mean_B      med_B   mean_ttp50    med_ttp50
-  100K        -0.207     0.000         7.0         0.0
-  500K        -0.170     0.000        10.9         0.0
-  1M          -0.164     0.000        15.0         0.0
+  Size         mean_B      std_B      med_B   mean_ttp50    med_ttp50
+  100K        -0.207     0.435     0.000         7.0         0.0
+  500K        -0.170     0.433     0.000        10.9         0.0
+  1M          -0.164     0.429     0.000        15.0         0.0
+
+  Burstiness by repost count bucket:
+  Size     Bucket                N     mean_B      std_B
+  100K     1            20,181,161     0.000     0.000
+  100K     2-4          15,851,465    -0.631     0.441
+  100K     5-9           5,325,398     0.084     0.244
+  100K     10-49         1,793,826     0.336     0.213
+  100K     50+               1,115     0.572     0.100
+  500K     1             8,377,815     0.000     0.000
+  500K     2-4           5,619,128    -0.632     0.447
+  500K     5-9           1,906,607     0.127     0.218
+  500K     10-49         1,079,821     0.382     0.167
+  500K     50+              17,484     0.538     0.107
+  1M       1             1,042,216     0.000     0.000
+  1M       2-4             649,746    -0.635     0.450
+  1M       5-9             208,429     0.140     0.204
+  1M       10-49           127,211     0.381     0.151
+  1M       50+               4,749     0.521     0.112
 
   Posts with 0 reposts:
   Size            count    % no engage   mean_lifetime   med_lifetime
@@ -233,48 +251,6 @@ All plots saved to /home/psoler/des-ctic/trace-analysis/analysis/output/
   1M                0.40          28.2    0.0141
   Users are net consumers (ratio << 1). Most sessions create 0 posts.
 
-
 ======================================================================
   INDEGREE STRATIFICATION
 ======================================================================
-
-=== Per-user empty-exit rate by indegree (follower count) ===
-
---- 100K ---
-  Bucket        N users  mean_empty%   med_empty%   mean_dur    total_act
-  zero            2,171        44.1%          47%       129     100,922
-  1-9            12,131        45.1%          50%       127      99,455
-  10-99          26,582        44.7%          49%       128     100,071
-  100-999        30,674        44.3%          47%       129     100,671
-  1K+            28,277        44.7%          48%       128     100,111
-  Zero-degree users: 2.2% of all users, mean pct_empty=44.1%
-
---- 500K ---
-  Bucket        N users  mean_empty%   med_empty%   mean_dur    total_act
-  zero            8,854        40.2%          39%       142       9,438
-  1-9            52,171        40.7%          40%       141       9,383
-  10-99         139,370        40.3%          39%       141       9,438
-  100-999       192,295        40.7%          40%       141       9,387
-  1K+           106,507        40.5%          39%       141       9,420
-  Zero-degree users: 1.8% of all users, mean pct_empty=40.2%
-
---- 1M ---
-  Bucket        N users  mean_empty%   med_empty%   mean_dur    total_act
-  zero           21,995        44.8%          47%       147         638
-  1-9           135,756        45.1%          47%       146         635
-  10-99         333,571        45.0%          47%       146         635
-  100-999       370,274        45.0%          47%       146         635
-  1K+           136,159        45.0%          47%       146         636
-  Zero-degree users: 2.2% of all users, mean pct_empty=44.8%
-
-Key finding: Follower count has NO effect on timeline starvation.
-Empty-exit rates, session durations, and total actions are identical
-across all indegree buckets. Zero-follower users starve at the same
-rate as users with 10K+ followers. The bimodal empty-exit distribution
-is not explained by network position — it is a timing effect: users
-who happen to be online during active periods get content; those who
-log in during quiet periods find empty timelines regardless of their
-follower count. The root cause is timeline clearing on every offline
-event, which resets everyone to zero backlog at session start.
-
-Plot: s2_empty_by_indegree.png

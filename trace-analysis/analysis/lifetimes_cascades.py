@@ -40,16 +40,40 @@ def table_lifetimes():
 
     # Burstiness and ttp50 for posts with reposts
     print(f"\n  Burstiness & time-to-peak (posts with reposts > 0):")
-    print(f"  {'Size':<8} {'mean_B':>10} {'med_B':>10} {'mean_ttp50':>12} {'med_ttp50':>12}")
+    print(f"  {'Size':<8} {'mean_B':>10} {'std_B':>10} {'med_B':>10} {'mean_ttp50':>12} {'med_ttp50':>12}")
     for s in SIZES:
         r = duckdb.sql(f"""
-            SELECT AVG(burstiness_B) as mean_B, MEDIAN(burstiness_B) as med_B,
+            SELECT AVG(burstiness_B) as mean_B, STDDEV(burstiness_B) as std_B,
+                   MEDIAN(burstiness_B) as med_B,
                    AVG(time_to_peak_50) as mean_t50, MEDIAN(time_to_peak_50) as med_t50
             FROM '{DATA}/{s}/out_posts.parquet'
             WHERE total_reposts > 0
         """).df().iloc[0]
-        print(f"  {s:<8} {r['mean_B']:>9.3f} {r['med_B']:>9.3f} "
+        print(f"  {s:<8} {r['mean_B']:>9.3f} {r['std_B']:>9.3f} {r['med_B']:>9.3f} "
               f"{r['mean_t50']:>11.1f} {r['med_t50']:>11.1f}")
+
+    # Burstiness by repost count bucket
+    print(f"\n  Burstiness by repost count bucket:")
+    print(f"  {'Size':<8} {'Bucket':<10} {'N':>12} {'mean_B':>10} {'std_B':>10}")
+    for s in SIZES:
+        r = duckdb.sql(f"""
+            SELECT
+                CASE WHEN total_reposts=1 THEN '1'
+                     WHEN total_reposts<5 THEN '2-4'
+                     WHEN total_reposts<10 THEN '5-9'
+                     WHEN total_reposts<50 THEN '10-49'
+                     ELSE '50+' END as bucket,
+                COUNT(*) as n,
+                AVG(burstiness_B) as mean_B,
+                STDDEV(burstiness_B) as std_B
+            FROM '{DATA}/{s}/out_posts.parquet'
+            WHERE total_reposts > 0
+            GROUP BY bucket
+            ORDER BY MIN(total_reposts)
+        """).df()
+        for _, row in r.iterrows():
+            print(f"  {s:<8} {row['bucket']:<10} {int(row['n']):>12,} "
+                  f"{row['mean_B']:>9.3f} {row['std_B']:>9.3f}")
     
     # Zero-repost posts
     print(f"\n  Posts with 0 reposts:")

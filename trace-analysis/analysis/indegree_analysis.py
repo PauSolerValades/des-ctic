@@ -54,6 +54,7 @@ def main():
             .agg(
                 n=("user_id", "count"),
                 mean_empty=("pct_empty", "mean"),
+                std_empty=("pct_empty", "std"),
                 med_empty=("pct_empty", "median"),
                 mean_dur=("mean_dur", "mean"),
                 total_act=("total_actions", "mean"),
@@ -64,11 +65,11 @@ def main():
 
         print(f"--- {s} ---")
         print(f"  {'Bucket':<10} {'N users':>10} {'mean_empty%':>12} "
-              f"{'med_empty%':>12} {'mean_dur':>10} {'total_act':>12}")
+              f"{'std_empty%':>12} {'med_empty%':>12} {'mean_dur':>10}")
         for _, row in agg.iterrows():
             print(f"  {row['deg_bucket']:<10} {int(row['n']):>10,} "
-                  f"{row['mean_empty']:>11.1f}% {row['med_empty']:>11.0f}% "
-                  f"{row['mean_dur']:>9.0f} {int(row['total_act']):>11,}")
+                  f"{row['mean_empty']:>11.1f}% {row['std_empty']:>11.1f}% "
+                  f"{row['med_empty']:>11.0f}% {row['mean_dur']:>9.0f}")
 
         zp = (r["indegree"] == 0).mean() * 100
         zm = r.loc[r["indegree"] == 0, "pct_empty"].mean()
