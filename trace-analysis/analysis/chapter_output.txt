@@ -254,3 +254,212 @@ All plots saved to /home/psoler/des-ctic/trace-analysis/analysis/output/
 ======================================================================
   INDEGREE STRATIFICATION
 ======================================================================
+
+
+======================================================================
+  INFLUENCER HYPOTHESIS — Correlation Test
+======================================================================
+
+=== Correlation: author_degree vs cascade metrics ===
+
+--- 100K ---
+  N = 26,492,414
+  Pearson:     deg↔virality r=+0.0041   deg↔size r=+0.0034
+  Spearman:    deg↔virality ρ=+0.0015   deg↔size ρ=+0.0015
+  Log-log:     deg↔virality r=-0.0003   deg↔size r=-0.0001
+  R² (degree → size):     0.00001130
+  R² (degree → virality): 0.00001650
+
+    Bucket           n    r(deg,ν)    mean ν
+      zero     578,907        +nan     1.89
+       1-9   3,178,793     -0.0124     1.91
+     10-99   7,053,387     -0.0157     1.91
+   100-999   8,061,222     -0.0045     1.90
+    1K-10K   7,331,495     +0.0080     1.90
+      10K+     288,610     -0.0306     1.94
+
+--- 500K ---
+  N = 10,523,763
+  Pearson:     deg↔virality r=+0.0028   deg↔size r=+0.0020
+  Spearman:    deg↔virality ρ=+0.0037   deg↔size ρ=+0.0036
+  Log-log:     deg↔virality r=+0.0050   deg↔size r=+0.0049
+  R² (degree → size):     0.00000396
+  R² (degree → virality): 0.00000792
+
+    Bucket           n    r(deg,ν)    mean ν
+      zero     191,904        +nan     2.04
+       1-9   1,092,108     -0.0030     2.04
+     10-99   2,945,356     +0.0070     2.04
+   100-999   4,025,555     +0.0035     2.05
+    1K-10K   2,108,713     -0.0010     2.06
+      10K+     160,127     +0.0063     2.04
+
+--- 1M ---
+  N = 1,317,255
+  Pearson:     deg↔virality r=+0.0004   deg↔size r=+0.0002
+  Spearman:    deg↔virality ρ=+0.0015   deg↔size ρ=+0.0009
+  Log-log:     deg↔virality r=+0.0041   deg↔size r=+0.0035
+  R² (degree → size):     0.00000003
+  R² (degree → virality): 0.00000014
+
+    Bucket           n    r(deg,ν)    mean ν
+      zero      28,047        +nan     2.09
+       1-9     181,026     +0.0076     2.08
+     10-99     445,884     -0.0017     2.10
+   100-999     483,975     +0.0085     2.10
+    1K-10K     166,749     +0.0004     2.10
+      10K+      11,574     +0.0202     2.07
+
+Conclusion: Author follower count explains ~0% of cascade size and virality
+variance (R² < 0.00002 in all cases). The influencer hypothesis is refuted —
+viral cascades are not driven by seed popularity. The homogeneous behavioral
+policy (p_repost = 0.012 for all users) ensures that downstream reposters'
+actions, not the original author's reach, determine cascade outcomes.
+
+======================================================================
+  MICRO-MACRO COUPLING RATIOS (REVISED)
+======================================================================
+
+=== 100K — Micro-Macro Coupling Ratios ===
+
+  Ratio  Formula                                                              Value
+  ────── ─────────────────────────────────────────────────────── ──────────────────
+  π      post_lifetime / session_duration                              7.33 ± 0.013
+  τ_c    post_lifetime / inter_creation_time                          42.21 ± 0.070
+  η      reposts_per_post / actions_per_session                        0.10 ± 0.000
+  κ      created_per_session / consumed_per_session                    0.01 ± 0.000
+  ψ      median_backlog / median_actions (robust)                      0.00 ± 0.001
+  ω      post_lifetime / mean_offline_gap                              1.90 ± 0.003
+  λ_r    reposts_per_session / session_duration                        0.00 ± 0.000
+  δ      inter_action_time / post_lifetime                             0.00 ± 0.000
+
+  Interpretations:
+    π   = posts outlive sessions by 7×
+    τ_c = 42 posts created during one post's lifetime
+    η   = reposts are 10.0% of a session's actions
+    κ   = users create 1.4% as many posts as they consume
+    ψ   = median backlog / median actions = 0.00
+          (mean-based: 5303%, inflated by heavy-tailed backlog)
+    ω   = a post survives 1.9 offline cycles
+    λ_r = 0.0029 reposts/tick (~341 ticks/repost per session)
+    δ   = 281 timeline checks fit in one post's lifetime
+
+=== 500K — Micro-Macro Coupling Ratios ===
+
+  Ratio  Formula                                                              Value
+  ────── ─────────────────────────────────────────────────────── ──────────────────
+  π      post_lifetime / session_duration                              7.64 ± 0.023
+  τ_c    post_lifetime / inter_creation_time                          49.23 ± 0.129
+  η      reposts_per_post / actions_per_session                        0.10 ± 0.000
+  κ      created_per_session / consumed_per_session                    0.01 ± 0.000
+  ψ      median_backlog / median_actions (robust)                      0.88 ± 0.012
+  ω      post_lifetime / mean_offline_gap                              2.22 ± 0.006
+  λ_r    reposts_per_session / session_duration                        0.00 ± 0.000
+  δ      inter_action_time / post_lifetime                             0.00 ± 0.000
+
+  Interpretations:
+    π   = posts outlive sessions by 8×
+    τ_c = 49 posts created during one post's lifetime
+    η   = reposts are 10.1% of a session's actions
+    κ   = users create 1.4% as many posts as they consume
+    ψ   = median backlog / median actions = 0.88
+          (mean-based: 3943%, inflated by heavy-tailed backlog)
+    ω   = a post survives 2.2 offline cycles
+    λ_r = 0.0029 reposts/tick (~340 ticks/repost per session)
+    δ   = 328 timeline checks fit in one post's lifetime
+
+=== 1M — Micro-Macro Coupling Ratios ===
+
+  Ratio  Formula                                                              Value
+  ────── ─────────────────────────────────────────────────────── ──────────────────
+  π      post_lifetime / session_duration                              9.59 ± 0.108
+  τ_c    post_lifetime / inter_creation_time                          55.37 ± 0.516
+  η      reposts_per_post / actions_per_session                        0.12 ± 0.001
+  κ      created_per_session / consumed_per_session                    0.01 ± 0.000
+  ψ      median_backlog / median_actions (robust)                      0.00 ± 0.000
+  ω      post_lifetime / mean_offline_gap                              2.51 ± 0.023
+  λ_r    reposts_per_session / session_duration                        0.00 ± 0.000
+  δ      inter_action_time / post_lifetime                             0.00 ± 0.000
+
+  Interpretations:
+    π   = posts outlive sessions by 10×
+    τ_c = 55 posts created during one post's lifetime
+    η   = reposts are 11.6% of a session's actions
+    κ   = users create 1.4% as many posts as they consume
+    ψ   = median backlog / median actions = 0.00
+          (mean-based: 2727%, inflated by heavy-tailed backlog)
+    ω   = a post survives 2.5 offline cycles
+    λ_r = 0.0029 reposts/tick (~342 ticks/repost per session)
+    δ   = 369 timeline checks fit in one post's lifetime
+
+=== 100K — Micro-Macro Coupling Ratios ===
+
+  Ratio  Formula                                                              Value
+  ────── ─────────────────────────────────────────────────────── ──────────────────
+  π      post_lifetime / session_duration                              7.33 ± 0.013
+  τ_c    post_lifetime / inter_creation_time                          42.21 ± 0.070
+  η      reposts_per_post / actions_per_session                        0.10 ± 0.000
+  κ      created_per_session / consumed_per_session                    0.01 ± 0.000
+  ψ      median_backlog / median_actions (robust)                      0.00 ± 0.001
+  ω      post_lifetime / mean_offline_gap                              1.90 ± 0.003
+  λ_r    reposts_per_session / session_duration                        0.00 ± 0.000
+  δ      inter_action_time / post_lifetime                             0.00 ± 0.000
+
+  Interpretations:
+    π   = posts outlive sessions by 7×
+    τ_c = 42 posts created during one post's lifetime
+    η   = reposts are 10.0% of a session's actions
+    κ   = users create 1.4% as many posts as they consume
+    ψ   = median backlog / median actions = 0.00
+          (mean-based: 5303%, inflated by heavy-tailed backlog)
+    ω   = a post survives 1.9 offline cycles
+    λ_r = 0.0029 reposts/tick (~341 ticks/repost per session)
+    δ   = 281 timeline checks fit in one post's lifetime
+
+=== 500K — Micro-Macro Coupling Ratios ===
+
+  Ratio  Formula                                                              Value
+  ────── ─────────────────────────────────────────────────────── ──────────────────
+  π      post_lifetime / session_duration                              7.64 ± 0.023
+  τ_c    post_lifetime / inter_creation_time                          49.23 ± 0.129
+  η      reposts_per_post / actions_per_session                        0.10 ± 0.000
+  κ      created_per_session / consumed_per_session                    0.01 ± 0.000
+  ψ      median_backlog / median_actions (robust)                      0.88 ± 0.012
+  ω      post_lifetime / mean_offline_gap                              2.22 ± 0.006
+  λ_r    reposts_per_session / session_duration                        0.00 ± 0.000
+  δ      inter_action_time / post_lifetime                             0.00 ± 0.000
+
+  Interpretations:
+    π   = posts outlive sessions by 8×
+    τ_c = 49 posts created during one post's lifetime
+    η   = reposts are 10.1% of a session's actions
+    κ   = users create 1.4% as many posts as they consume
+    ψ   = median backlog / median actions = 0.88
+          (mean-based: 3943%, inflated by heavy-tailed backlog)
+    ω   = a post survives 2.2 offline cycles
+    λ_r = 0.0029 reposts/tick (~340 ticks/repost per session)
+    δ   = 328 timeline checks fit in one post's lifetime
+
+=== 1M — Micro-Macro Coupling Ratios ===
+
+  Ratio  Formula                                                              Value
+  ────── ─────────────────────────────────────────────────────── ──────────────────
+  π      post_lifetime / session_duration                              9.59 ± 0.108
+  τ_c    post_lifetime / inter_creation_time                          55.37 ± 0.516
+  η      reposts_per_post / actions_per_session                        0.12 ± 0.001
+  κ      created_per_session / consumed_per_session                    0.01 ± 0.000
+  ψ      median_backlog / median_actions (robust)                      0.00 ± 0.000
+  ω      post_lifetime / mean_offline_gap                              2.51 ± 0.023
+  λ_r    reposts_per_session / session_duration                        0.00 ± 0.000
+  δ      inter_action_time / post_lifetime                             0.00 ± 0.000
+
+  Interpretations:
+    π   = posts outlive sessions by 10×
+    τ_c = 55 posts created during one post's lifetime
+    η   = reposts are 11.6% of a session's actions
+    κ   = users create 1.4% as many posts as they consume
+    ψ   = median backlog / median actions = 0.00
+          (mean-based: 2727%, inflated by heavy-tailed backlog)
+    ω   = a post survives 2.5 offline cycles
+    λ_r = 0.0029 reposts/tick (~342 ticks/repost per session)
+    δ   = 369 timeline checks fit in one post's lifetime
