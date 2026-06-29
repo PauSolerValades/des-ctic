@@ -340,19 +340,19 @@ fn simulationBatch(
             // JSONL conversion
             var jsonl_buf: [std.fs.max_path_bytes]u8 = undefined;
 
-            const action_jsonl = try std.fmt.bufPrint(&jsonl_buf, "{s}/{d}-action_trace.jsonl", .{ run_dir, i });
+            const action_jsonl = try std.fmt.bufPrint(&jsonl_buf, "{s}/{d}-action_trace.jsonl", .{ run_dir, run_idx });
             if (!skipjsonl) try traces.bytesToJsonl(io, traces.TraceAction, action_bin, action_jsonl);
 
-            const session_jsonl = try std.fmt.bufPrint(&jsonl_buf, "{s}/{d}-session_trace.jsonl", .{ run_dir, i });
+            const session_jsonl = try std.fmt.bufPrint(&jsonl_buf, "{s}/{d}-session_trace.jsonl", .{ run_dir, run_idx });
             if (!skipjsonl) try traces.bytesToJsonl(io, traces.TraceSession, session_bin, session_jsonl);
 
-            const create_jsonl = try std.fmt.bufPrint(&jsonl_buf, "{s}/{d}-create_trace.jsonl", .{ run_dir, i });
+            const create_jsonl = try std.fmt.bufPrint(&jsonl_buf, "{s}/{d}-create_trace.jsonl", .{ run_dir, run_idx });
             if (!skipjsonl) try traces.bytesToJsonl(io, traces.TraceCreate, create_bin, create_jsonl);
 
-            const prop_jsonl = try std.fmt.bufPrint(&jsonl_buf, "{s}/{d}-propagate_trace.jsonl", .{ run_dir, i });
+            const prop_jsonl = try std.fmt.bufPrint(&jsonl_buf, "{s}/{d}-propagate_trace.jsonl", .{ run_dir, run_idx });
             if (!skipjsonl) try traces.bytesToJsonl(io, traces.TracePropagation, prop_bin, prop_jsonl);
 
-            const swap_jsonl = try std.fmt.bufPrint(&jsonl_buf, "{s}/{d}-swap_trace.jsonl", .{ run_dir, i });
+            const swap_jsonl = try std.fmt.bufPrint(&jsonl_buf, "{s}/{d}-swap_trace.jsonl", .{ run_dir, run_idx });
             if (!skipjsonl) try traces.bytesToJsonl(io, traces.TraceSwap, swap_bin, swap_jsonl);
         } else {
             // just run the simulation
