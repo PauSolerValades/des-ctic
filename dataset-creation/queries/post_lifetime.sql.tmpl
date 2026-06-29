@@ -1,0 +1,84 @@
+-- post_lifetime.sql
+-- Per-post aggregated lifetime metrics: T_50, T_95, T_99, time_to_peak.
+
+COPY (
+  WITH
+  -- Read from raw_post_lifetime (already generated)
+  raw AS (
+    SELECT *
+    FROM read_parquet('{{.OutputDir}}/raw_post_lifetime.parquet')
+  ),
+
+  -- Running cumulative repost count per post
+  cumulative AS (
+    SELECT
+      *,
+      ROW_NUMBER() OVER (PARTITION BY run_id, post_id ORDER BY repost_time) AS cum_rep,
+      COUNT(*)     OVER (PARTITION BY run_id, post_id)                     AS total_rep
+    FROM raw
+  ),
+
+  -- T_50, T_95, T_99: first repost_time where cumulative reaches the percentile
+  percentiles AS (
+    SELECT
+      run_id,
+      post_id,
+      MAX(creation_time) AS creation_time,
+      MAX(repost_time)   AS last_repost,
+      MAX(total_rep)     AS total_reposts,
+      -- T_50: time of the repost at position ceil(50% * total)
+      MIN(CASE WHEN cum_rep >= CEIL(total_rep * 0.50) THEN repost_time END) AS T_50,
+      MIN(CASE WHEN cum_rep >= CEIL(total_rep * 0.95) THEN repost_time END) AS T_95,
+      MIN(CASE WHEN cum_rep >= CEIL(total_rep * 0.99) THEN repost_time END) AS T_99
+    FROM cumulative
+    GROUP BY run_id, post_id
+  ),
+
+  -- Time to peak: time of the bin with the most reposts
+  bins AS (
+    SELECT
+      run_id,
+      post_id,
+      FLOOR((repost_time - creation_time) / NULLIF(last_repost - creation_time, 0) * 100) AS bin,
+      repost_time
+    FROM (
+      SELECT
+        r.*,
+        MAX(repost_time) OVER (PARTITION BY r.run_id, r.post_id) AS last_repost,
+        MAX(creation_time) OVER (PARTITION BY r.run_id, r.post_id) AS creation_time
+      FROM raw r
+    ) sub
+    WHERE last_repost > creation_time
+  ),
+  peak AS (
+    SELECT run_id, post_id, bin, COUNT(*) AS bin_count
+    FROM bins
+    GROUP BY run_id, post_id, bin
+    QUALIFY ROW_NUMBER() OVER (PARTITION BY run_id, post_id ORDER BY bin_count DESC) = 1
+  ),
+  peak_time AS (
+    SELECT
+      b.run_id,
+      b.post_id,
+      MIN(b.repost_time) AS time_to_peak
+    FROM bins b
+    JOIN peak p ON b.run_id = p.run_id AND b.post_id = p.post_id AND b.bin = p.bin
+    GROUP BY b.run_id, b.post_id
+  )
+
+  SELECT
+    p.run_id,
+    p.post_id,
+    p.creation_time,
+    p.last_repost,
+    p.total_reposts,
+    p.T_50  - p.creation_time AS T_50,
+    p.T_95  - p.creation_time AS T_95,
+    p.T_99  - p.creation_time AS T_99,
+    pt.time_to_peak - p.creation_time AS time_to_peak
+  FROM percentiles p
+  LEFT JOIN peak_time pt ON p.run_id = pt.run_id AND p.post_id = pt.post_id
+  WHERE p.total_reposts > 0
+  ORDER BY p.run_id, p.post_id
+
+) TO '{{.OutputDir}}/post_lifetime.parquet' (FORMAT PARQUET);

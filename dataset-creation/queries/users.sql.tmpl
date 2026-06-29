@@ -1,0 +1,57 @@
+-- users.sql
+-- Per-user aggregates. Requires sessions.parquet to exist first.
+
+COPY (
+  SELECT
+    s.run_id          AS run_id,
+    s.uid             AS user_id,
+    s.num_sessions,
+    COALESCE(a.total_reposts, 0)        AS total_reposts,
+    COALESCE(a.total_likes, 0)          AS total_likes,
+    COALESCE(a.total_actions, 0)        AS total_actions,
+    COALESCE(cr.total_posts_created, 0) AS total_posts_created,
+    COALESCE(sw.total_swaps, 0)          AS total_swaps,
+    s.avg_session_length,
+    s.total_online_time,
+    s.boredom_ended_sessions
+
+  FROM (
+    SELECT run_id, user_id AS uid,
+           COUNT(*)                          AS num_sessions,
+           AVG(duration)                     AS avg_session_length,
+           SUM(duration)                     AS total_online_time,
+           SUM(CASE WHEN ended_by_boredom THEN 1 ELSE 0 END) AS boredom_ended_sessions
+    FROM read_parquet('{{.OutputDir}}/sessions.parquet')
+    GROUP BY run_id, uid
+  ) s
+
+  LEFT JOIN (
+    SELECT regexp_extract(filename, '/(\d+)-', 1)::INTEGER AS run_id,
+           user_id AS auid,
+           COUNT(*)                                   AS total_actions,
+           COUNT(*) FILTER (WHERE type = 'repost')    AS total_reposts,
+           COUNT(*) FILTER (WHERE type = 'like')      AS total_likes
+    FROM read_json('{{.TracesDir}}/*-action_trace.jsonl', filename=true, ignore_errors=true)
+    GROUP BY 1, 2
+  ) a ON s.run_id = a.run_id AND s.uid = a.auid
+
+  LEFT JOIN (
+    SELECT run_id, user_id AS cruid, COUNT(*) AS total_posts_created
+    FROM read_csv('{{.CascadesSSV}}', sep=' ', header=true,
+      columns={'run_id': 'INTEGER', 'post_id': 'INTEGER', 'user_id': 'INTEGER',
+               'parent_id': 'INTEGER', 'type': 'VARCHAR', 'time': 'DOUBLE'},
+      auto_detect=false)
+    WHERE type = 'creation'
+    GROUP BY run_id, cruid
+  ) cr ON s.run_id = cr.run_id AND s.uid = cr.cruid
+
+  LEFT JOIN (
+    SELECT regexp_extract(filename, '/(\d+)-', 1)::INTEGER AS run_id,
+           user_id AS suid, COUNT(*) AS total_swaps
+    FROM read_json('{{.TracesDir}}/*-swap_trace.jsonl', filename=true, ignore_errors=true)
+    GROUP BY 1, 2
+  ) sw ON s.run_id = sw.run_id AND s.uid = sw.suid
+
+  ORDER BY run_id, user_id
+
+) TO '{{.OutputDir}}/users.parquet' (FORMAT PARQUET);

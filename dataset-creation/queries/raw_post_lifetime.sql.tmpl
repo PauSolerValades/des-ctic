@@ -1,0 +1,65 @@
+-- raw_post_lifetime.sql
+-- One row per repost, with propagation timing and inter-repost gaps.
+
+COPY (
+  WITH
+  reposts AS (
+    SELECT
+      regexp_extract(filename, '/(\d+)-', 1)::INTEGER AS run_id,
+      user_id   AS reposter_id,
+      post_id   AS rpid,
+      parent_id AS rparent,
+      time      AS repost_time
+    FROM read_json('{{.TracesDir}}/*-action_trace.jsonl', filename=true, ignore_errors=true)
+    WHERE type = 'repost'
+  ),
+  propagations AS (
+    SELECT
+      regexp_extract(filename, '/(\d+)-', 1)::INTEGER AS run_id,
+      user_id   AS puser,
+      post_id   AS ppid,
+      time      AS propagated_time
+    FROM read_json('{{.TracesDir}}/*-propagate_trace.jsonl', filename=true, ignore_errors=true)
+  ),
+  creations AS (
+    SELECT run_id, post_id AS cpid, time AS creation_time
+    FROM read_csv('{{.CascadesSSV}}', sep=' ', header=true,
+      columns={'run_id': 'INTEGER', 'post_id': 'INTEGER', 'user_id': 'INTEGER',
+               'parent_id': 'INTEGER', 'type': 'VARCHAR', 'time': 'DOUBLE'},
+      auto_detect=false)
+    WHERE type = 'creation'
+  ),
+
+  with_propagation AS (
+    SELECT
+      r.run_id, r.rpid AS post_id, c.creation_time,
+      r.reposter_id, r.rparent AS parent_id,
+      p.propagated_time, r.repost_time,
+      r.repost_time - p.propagated_time AS sitting_in_timeline
+    FROM reposts r
+    JOIN propagations p ON r.run_id = p.run_id
+                        AND r.rparent = p.puser
+                        AND r.rpid = p.ppid
+    LEFT JOIN creations c ON r.run_id = c.run_id AND r.rpid = c.cpid
+  ),
+
+  with_gaps AS (
+    SELECT
+      *,
+      repost_time - LAG(repost_time) OVER (
+        PARTITION BY run_id, post_id ORDER BY repost_time
+      ) AS global_gap,
+      repost_time - LAG(repost_time) OVER (
+        PARTITION BY run_id, post_id, parent_id ORDER BY repost_time
+      ) AS topology_gap
+    FROM with_propagation
+  )
+
+  SELECT
+    run_id, post_id, creation_time, reposter_id, parent_id,
+    propagated_time, repost_time, sitting_in_timeline,
+    global_gap, topology_gap
+  FROM with_gaps
+  ORDER BY run_id, post_id, repost_time
+
+) TO '{{.OutputDir}}/raw_post_lifetime.parquet' (FORMAT PARQUET);

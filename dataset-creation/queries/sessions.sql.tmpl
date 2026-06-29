@@ -1,0 +1,50 @@
+-- sessions.sql
+-- One row per session: start/end times, duration, boredom flag.
+
+COPY (
+  WITH
+  events AS (
+    SELECT
+      regexp_extract(filename, '/(\d+)-', 1)::INTEGER AS run_id,
+      user_id,
+      type,
+      time,
+      backlog
+    FROM read_json('{{.TracesDir}}/*-session_trace.jsonl', filename=true, ignore_errors=true)
+  ),
+
+  starts AS (
+    SELECT *, ROW_NUMBER() OVER (PARTITION BY run_id, user_id ORDER BY time) AS n
+    FROM events WHERE type = 'start'
+  ),
+
+  ends AS (
+    SELECT *, ROW_NUMBER() OVER (PARTITION BY run_id, user_id ORDER BY time) AS n
+    FROM events WHERE type = 'end'
+  ),
+
+  paired AS (
+    SELECT
+      s.run_id,
+      s.user_id,
+      s.n        AS session_num,
+      s.time     AS start_time,
+      e.time     AS end_time,
+      e.time - s.time AS duration,
+      e.backlog  AS end_backlog
+    FROM starts s
+    JOIN ends e ON s.run_id = e.run_id AND s.user_id = e.user_id AND s.n = e.n
+  )
+
+  SELECT
+    run_id,
+    user_id,
+    session_num,
+    start_time,
+    end_time,
+    duration,
+    end_backlog == 0 AS ended_by_boredom
+  FROM paired
+  ORDER BY run_id, user_id, session_num
+
+) TO '{{.OutputDir}}/sessions.parquet' (FORMAT PARQUET);

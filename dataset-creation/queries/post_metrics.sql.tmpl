@@ -1,0 +1,79 @@
+-- post_metrics.sql
+-- Per-post metrics: reposts, likes, ignores, conversion rate.
+
+COPY (
+  WITH
+  posts AS (
+    SELECT DISTINCT
+      run_id,
+      post_id
+    FROM read_csv('{{.CascadesSSV}}', sep=' ', header=true,
+      columns={'run_id': 'INTEGER', 'post_id': 'INTEGER', 'user_id': 'INTEGER',
+               'parent_id': 'INTEGER', 'type': 'VARCHAR', 'time': 'DOUBLE'},
+      auto_detect=false)
+  ),
+
+  authors AS (
+    SELECT
+      run_id,
+      post_id,
+      user_id AS author_id
+    FROM read_csv('{{.CascadesSSV}}', sep=' ', header=true,
+      columns={'run_id': 'INTEGER', 'post_id': 'INTEGER', 'user_id': 'INTEGER',
+               'parent_id': 'INTEGER', 'type': 'VARCHAR', 'time': 'DOUBLE'},
+      auto_detect=false)
+    WHERE type = 'creation'
+  ),
+
+  reposts AS (
+    SELECT
+      run_id,
+      post_id,
+      COUNT(*) AS total_reposts
+    FROM read_csv('{{.CascadesSSV}}', sep=' ', header=true,
+      columns={'run_id': 'INTEGER', 'post_id': 'INTEGER', 'user_id': 'INTEGER',
+               'parent_id': 'INTEGER', 'type': 'VARCHAR', 'time': 'DOUBLE'},
+      auto_detect=false)
+    WHERE type = 'repost'
+    GROUP BY run_id, post_id
+  ),
+
+  likes AS (
+    SELECT
+      run_id,
+      post_id,
+      COUNT(*) AS total_likes
+    FROM read_csv('{{.LikesSSV}}', sep=' ', header=true,
+      columns={'run_id': 'INTEGER', 'post_id': 'INTEGER', 'user_id': 'INTEGER',
+               'parent_id': 'INTEGER', 'type': 'VARCHAR', 'time': 'DOUBLE'},
+      auto_detect=false)
+    GROUP BY run_id, post_id
+  ),
+
+  ignores AS (
+    SELECT
+      regexp_extract(filename, '/(\d+)-', 1)::INTEGER AS run_id,
+      post_id,
+      COUNT(*) AS total_ignores
+    FROM read_json('{{.TracesDir}}/*-action_trace.jsonl', filename=true, ignore_errors=true)
+    WHERE type = 'ignore'
+    GROUP BY run_id, post_id
+  )
+
+  SELECT
+    p.run_id,
+    p.post_id,
+    a.author_id,
+    COALESCE(r.total_reposts, 0) AS total_reposts,
+    COALESCE(l.total_likes, 0)    AS total_likes,
+    COALESCE(i.total_ignores, 0)  AS total_ignores,
+    (COALESCE(r.total_reposts, 0) + COALESCE(l.total_likes, 0))::FLOAT
+      / NULLIF(COALESCE(r.total_reposts, 0) + COALESCE(l.total_likes, 0) + COALESCE(i.total_ignores, 0), 0) AS conversion_rate
+  FROM posts p
+  LEFT JOIN authors a  ON p.run_id = a.run_id AND p.post_id = a.post_id
+  LEFT JOIN reposts r  ON p.run_id = r.run_id AND p.post_id = r.post_id
+  LEFT JOIN likes l    ON p.run_id = l.run_id AND p.post_id = l.post_id
+  LEFT JOIN ignores i  ON p.run_id = i.run_id AND p.post_id = i.post_id
+  ORDER BY p.run_id, p.post_id
+
+) TO '{{.OutputDir}}/post_metrics.parquet' (FORMAT PARQUET);

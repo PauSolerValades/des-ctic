@@ -1,0 +1,100 @@
+-- run_metrics.sql
+-- Per-run global metrics, mirrors SimResults for validation.
+
+COPY (
+  WITH
+  runs AS (
+    SELECT DISTINCT run_id
+    FROM read_csv('{{.CascadesSSV}}', sep=' ', header=true,
+      columns={'run_id': 'INTEGER', 'post_id': 'INTEGER', 'user_id': 'INTEGER',
+               'parent_id': 'INTEGER', 'type': 'VARCHAR', 'time': 'DOUBLE'},
+      auto_detect=false)
+  ),
+
+  created AS (
+    SELECT
+      run_id,
+      COUNT(*) AS total_posts_created
+    FROM read_csv('{{.CascadesSSV}}', sep=' ', header=true,
+      columns={'run_id': 'INTEGER', 'post_id': 'INTEGER', 'user_id': 'INTEGER',
+               'parent_id': 'INTEGER', 'type': 'VARCHAR', 'time': 'DOUBLE'},
+      auto_detect=false)
+    WHERE type = 'creation'
+    GROUP BY run_id
+  ),
+
+  reposts AS (
+    SELECT
+      run_id,
+      COUNT(*) AS total_reposts
+    FROM read_csv('{{.CascadesSSV}}', sep=' ', header=true,
+      columns={'run_id': 'INTEGER', 'post_id': 'INTEGER', 'user_id': 'INTEGER',
+               'parent_id': 'INTEGER', 'type': 'VARCHAR', 'time': 'DOUBLE'},
+      auto_detect=false)
+    WHERE type = 'repost'
+    GROUP BY run_id
+  ),
+
+  likes AS (
+    SELECT
+      run_id,
+      COUNT(*) AS total_likes
+    FROM read_csv('{{.LikesSSV}}', sep=' ', header=true,
+      columns={'run_id': 'INTEGER', 'post_id': 'INTEGER', 'user_id': 'INTEGER',
+               'parent_id': 'INTEGER', 'type': 'VARCHAR', 'time': 'DOUBLE'},
+      auto_detect=false)
+    GROUP BY run_id
+  ),
+
+  ignores AS (
+    SELECT
+      regexp_extract(filename, '/(\d+)-', 1)::INTEGER AS run_id,
+      COUNT(*) AS total_ignores
+    FROM read_json('{{.TracesDir}}/*-action_trace.jsonl', filename=true, ignore_errors=true)
+    WHERE type = 'ignore'
+    GROUP BY run_id
+  ),
+
+  sessions AS (
+    SELECT
+      regexp_extract(filename, '/(\d+)-', 1)::INTEGER AS run_id,
+      COUNT(*) FILTER (WHERE type = 'start')           AS total_sessions,
+      COUNT(*) FILTER (WHERE type = 'end' AND backlog = 0)  AS total_boredom_ends,
+      COUNT(*) FILTER (WHERE type = 'end' AND backlog > 0)  AS total_max_duration_ends,
+      MAX("time")                                      AS duration
+    FROM read_json('{{.TracesDir}}/*-session_trace.jsonl', filename=true, ignore_errors=true)
+    GROUP BY run_id
+  ),
+
+  swaps AS (
+    SELECT
+      regexp_extract(filename, '/(\d+)-', 1)::INTEGER AS run_id,
+      COUNT(*) AS total_swaps
+    FROM read_json('{{.TracesDir}}/*-swap_trace.jsonl', filename=true, ignore_errors=true)
+    GROUP BY run_id
+  )
+
+  SELECT
+    r.run_id,
+    COALESCE(c.total_posts_created, 0) AS total_posts_created,
+    COALESCE(rp.total_reposts, 0)      AS total_reposts,
+    COALESCE(l.total_likes, 0)         AS total_likes,
+    COALESCE(i.total_ignores, 0)       AS total_ignores,
+    COALESCE(rp.total_reposts, 0) + COALESCE(l.total_likes, 0) + COALESCE(i.total_ignores, 0) AS total_interactions,
+    (COALESCE(rp.total_reposts, 0) + COALESCE(l.total_likes, 0))::FLOAT
+      / NULLIF(COALESCE(rp.total_reposts, 0) + COALESCE(l.total_likes, 0) + COALESCE(i.total_ignores, 0), 0) AS conversion_rate,
+    COALESCE(s.total_sessions, 0)           AS total_sessions,
+    COALESCE(s.total_boredom_ends, 0)       AS total_boredom_ends,
+    COALESCE(s.total_max_duration_ends, 0)  AS total_max_duration_ends,
+    COALESCE(sw.total_swaps, 0)             AS total_swaps,
+    s.duration
+  FROM runs r
+  LEFT JOIN created c   ON r.run_id = c.run_id
+  LEFT JOIN reposts rp  ON r.run_id = rp.run_id
+  LEFT JOIN likes l     ON r.run_id = l.run_id
+  LEFT JOIN ignores i   ON r.run_id = i.run_id
+  LEFT JOIN sessions s  ON r.run_id = s.run_id
+  LEFT JOIN swaps sw    ON r.run_id = sw.run_id
+  ORDER BY r.run_id
+
+) TO '{{.OutputDir}}/run_metrics.parquet' (FORMAT PARQUET);
