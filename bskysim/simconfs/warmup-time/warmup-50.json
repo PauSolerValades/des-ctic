@@ -2,7 +2,7 @@
   "seed": 42,
   "horizon": 6001,
   "duration": 5000,
-  "warmup_time": 30,
+  "warmup_time": 50,
   "user_policy": {
     "weights": [0.80, 0.188, 0.012 ],
     "data": [ "ignore", "like", "repost" ]

@@ -104,6 +104,8 @@ pub fn main(init: std.process.Init) !void {
     defer config.delete(gpa);
     try stderr.flush(); // if a warning happens
 
+    //TODO: dump current config into the output folder with stringify
+
     const startTimeLoadData = Io.Timestamp.now(init.io, .real);
     const sampled_topology = try loader.BinaryGraph.create(init.io, data_alloc, args.data);
     const elapsedTimeLoadData = startTimeLoadData.untilNow(init.io, .real);
@@ -147,6 +149,16 @@ pub fn main(init: std.process.Init) !void {
     };
 
     const run_dir = traces_base;
+
+    var config_buff: [std.fs.max_path_bytes]u8 = undefined;
+    const used_config_path = try std.fmt.bufPrint(&config_buff, "{s}/used_config.json", .{run_dir});
+    const file_config = try Io.Dir.cwd().createFile(init.io, used_config_path, .{ .truncate = true });
+    defer file_config.close(init.io);
+    var config_buf2: [4096]u8 = undefined;
+    var config_writer = file_config.writerStreaming(init.io, &config_buf2);
+    const config_w = &config_writer.interface;
+    try config_w.writeAll(content);
+    try config_w.flush();
 
     var times_path_buf: [std.fs.max_path_bytes]u8 = undefined;
     const times_path = try std.fmt.bufPrint(&times_path_buf, "{s}/execution_times.ssv", .{run_dir});
@@ -238,6 +250,13 @@ fn simulationBatch(
 
     var state: SimState = try .create(io, arena, gpa, prng.random(), topology);
     defer state.delete(arena, gpa);
+
+    if (worker_id == 0) {
+        // Dump the configuration
+        var b: [64]u8 = undefined;
+        const path = try std.fmt.bufPrint(&b, "{s}/user_distributions.ssv", .{run_dir});
+        try state.dumpUsers(io, path);
+    }
 
     var times_buf: [256]u8 = undefined;
     var times_writer = times_file.writerStreaming(io, &times_buf);

@@ -161,6 +161,33 @@ pub const SimState = struct {
         }
     }
 
+    pub fn dumpUsers(self: *const @This(), io: Io, path: []const u8) !void {
+        const session_duration_slice = self.users.items(.session_duration);
+        const inter_session_slice = self.users.items(.inter_session_time);
+        const inter_creation_slice = self.users.items(.inter_creation_time);
+
+        const dist_file = try Io.Dir.cwd().createFile(io, path, .{ .truncate = true });
+        defer dist_file.close(io);
+
+        var buf: [4096]u8 = undefined;
+        var userdist_writer = dist_file.writerStreaming(io, &buf);
+        const userdist = &userdist_writer.interface;
+
+        try userdist.writeAll("session_duration_xmin session_duration_alpha inter_session_time_xmin inter_session_time_alpha inter_creation_time_xmin inter_creation_time_alpha\n");
+
+        for (0..self.users.len) |i| {
+            try userdist.print("{d} {d} {d} {d} {d} {d}\n", .{
+                session_duration_slice[i].scale,
+                session_duration_slice[i].shape,
+                inter_session_slice[i].scale,
+                inter_session_slice[i].shape,
+                inter_creation_slice[i].scale,
+                inter_creation_slice[i].shape,
+            });
+        }
+        try userdist.flush();
+    }
+
     pub fn delete(self: *@This(), arena: Allocator, gpa: Allocator) void {
         self.users.deinit(arena);
 
@@ -189,4 +216,13 @@ pub const SimState = struct {
         self.user_seen_post.clearRetainingCapacity();
         self.user_interact_post.clearRetainingCapacity();
     }
+};
+
+pub const UserSampled = struct {
+    session_duration_xmin: f32,
+    session_duration_alpha: f32,
+    inter_session_time_xmin: f32,
+    inter_session_time_alpha: f32,
+    inter_creation_time_xmin: f32,
+    inter_creation_time_alpha: f32,
 };

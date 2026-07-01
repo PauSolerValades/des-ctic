@@ -51,6 +51,7 @@ pub const SimMetrics = struct {
     generated_events: u64 = 0,
     dropped_events: u64 = 0,
 
+    posts_at_warmup: u64 = 0,
     post_count: u32 = 0,
 
     impressions: u64 = 0,
@@ -140,6 +141,7 @@ fn stageOne(
                 try traces.create.writeAll(bytes);
 
                 metrics.post_count += 1;
+                metrics.posts_at_warmup += 1;
 
                 const new_post = gen.eventCreatePost(rng, simconf, &state.users, t_clock.*, current_uid, state.users.items(.session_gen)[current_uid], metrics.generated_events);
                 queue.push(gpa, new_post) catch return error.OutOfMemoryQueue;
@@ -383,7 +385,7 @@ pub fn simulate(
                                 // desensitized: user propagated, can't interact with this post again
                                 state.user_interact_post.set(current_uid, p.post_id);
 
-                                const propagate = gen.eventPropagate(rng, simconf, t_clock, current_uid, p.post_id, p.parent_id, metrics.generated_events);
+                                const propagate = gen.eventPropagate(rng, simconf, t_clock, current_uid, p.post_id, current_uid, metrics.generated_events);
                                 queue.push(gpa, propagate) catch return error.OutOfMemoryQueue;
                                 metrics.generated_events += 1;
                                 metrics.reposts += 1;
@@ -499,7 +501,7 @@ pub fn simulate(
         .avg_session_length = metrics.total_online_time / @as(f64, @floatFromInt(metrics.total_sessions)),
         .avg_post_per_session = @as(f64, @floatFromInt(metrics.impressions)) / @as(f64, @floatFromInt(metrics.total_sessions)),
         .timeline_drain_ratio = @as(f64, @floatFromInt(metrics.empty_timeline_ends)) / @as(f64, @floatFromInt(metrics.total_sessions)),
-        .posts_at_warmup = @as(f64, @floatFromInt(metrics.post_count)) / @as(f64, @floatFromInt(state.user_interact_post.len)),
+        .posts_at_warmup = @as(f64, @floatFromInt(metrics.posts_at_warmup)) / @as(f64, @floatFromInt(metrics.post_count)),
     };
 
     return result;
