@@ -8,8 +8,14 @@ zig-out/
 zig-pkg/
 
 traces/
+datasets/
+cascades/ 
 
 bskysim/data/
 
 construct-cascades/buckets
 construct-cascades/cascades.ssv
+
+# Go
+dataset-creation/dataset-creation
+dataset-creation/data/

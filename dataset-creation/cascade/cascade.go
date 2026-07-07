@@ -76,13 +76,15 @@ func Init(key Key, root Root, reposts []Repost) *Cascade {
 	c.Nodes[0] = Node{UserID: root.AuthorID, Time: root.Time}
 	c.idxByUser[root.AuthorID] = 0
 
-	// Pass 1: add nodes and count children per parent
-	childCount := make([]int, n)
+	// Pre-pass: build idxByUser for all users first so passes 1 & 2 agree
 	for i, r := range reposts {
-		idx := i + 1
-		c.Nodes[idx] = Node{UserID: r.UserID, Time: r.Time}
-		c.idxByUser[r.UserID] = idx
+		c.Nodes[i+1] = Node{UserID: r.UserID, Time: r.Time}
+		c.idxByUser[r.UserID] = i + 1
+	}
 
+	// Pass 1: count children per parent
+	childCount := make([]int, n)
+	for _, r := range reposts {
 		parentIdx, ok := c.idxByUser[r.ParentID]
 		if !ok {
 			parentIdx = 0

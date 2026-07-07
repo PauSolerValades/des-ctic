@@ -1,9 +1,10 @@
 -- sessions.sql
--- One row per session: start/end times, duration, boredom flag.
+-- One row per session: start/end times, duration, boredom flag,
+-- and per-session action counts (likes, reposts, ignores).
 
 COPY (
   WITH
-  events AS (
+  session_events AS (
     SELECT
       regexp_extract(filename, '/(\d+)-', 1)::INTEGER AS run_id,
       user_id,
@@ -15,12 +16,12 @@ COPY (
 
   starts AS (
     SELECT *, ROW_NUMBER() OVER (PARTITION BY run_id, user_id ORDER BY time) AS n
-    FROM events WHERE type = 'start'
+    FROM session_events WHERE type = 'start'
   ),
 
   ends AS (
     SELECT *, ROW_NUMBER() OVER (PARTITION BY run_id, user_id ORDER BY time) AS n
-    FROM events WHERE type = 'end'
+    FROM session_events WHERE type = 'end'
   ),
 
   paired AS (
@@ -34,17 +35,36 @@ COPY (
       e.backlog  AS end_backlog
     FROM starts s
     JOIN ends e ON s.run_id = e.run_id AND s.user_id = e.user_id AND s.n = e.n
+  ),
+
+  actions AS (
+    SELECT
+      regexp_extract(filename, '/(\d+)-', 1)::INTEGER AS run_id,
+      user_id,
+      type,
+      time
+    FROM read_json('{{.TracesDir}}/*-action_trace.jsonl', filename=true, ignore_errors=true)
   )
 
   SELECT
-    run_id,
-    user_id,
-    session_num,
-    start_time,
-    end_time,
-    duration,
-    end_backlog == 0 AS ended_by_boredom
-  FROM paired
-  ORDER BY run_id, user_id, session_num
+    p.run_id,
+    p.user_id,
+    p.session_num,
+    p.start_time,
+    p.end_time,
+    p.duration,
+    p.end_backlog == 0 AS ended_by_boredom,
+    COUNT(a.type)                         AS total_actions,
+    COUNT(a.type) FILTER (WHERE a.type = 'like')   AS total_likes,
+    COUNT(a.type) FILTER (WHERE a.type = 'repost') AS total_reposts,
+    COUNT(a.type) FILTER (WHERE a.type = 'ignore') AS total_ignores
+  FROM paired p
+  LEFT JOIN actions a
+    ON p.run_id = a.run_id
+    AND p.user_id = a.user_id
+    AND a.time >= p.start_time
+    AND a.time <= p.end_time
+  GROUP BY p.run_id, p.user_id, p.session_num, p.start_time, p.end_time, p.duration, p.end_backlog
+  ORDER BY p.run_id, p.user_id, p.session_num
 
 ) TO '{{.OutputDir}}/sessions.parquet' (FORMAT PARQUET);

@@ -4,18 +4,26 @@
   "duration": 5000,
   "warmup_time": 750,
   "user_policy": {
-    "weights": [0.80, 0.188, 0.012 ],
-    "data": [ "ignore", "like", "repost" ]
+    "weights": [
+      0.8,
+      0.188,
+      0.012
+    ],
+    "data": [
+      "ignore",
+      "like",
+      "repost"
+    ]
   },
   "user_inter_action": {
     "exponential": {
-      "mean": 3 
+      "mean": 3
     }
   },
   "warmup_post_inter_creation": {
     "uniform": {
       "min": 0,
-      "max": 1000,
+      "max": 750,
       "interval": "oc"
     }
   },
@@ -24,7 +32,7 @@
       "value": 1
     }
   },
-  "interaction_delay": { 
+  "interaction_delay": {
     "constant": {
       "value": 1
     }

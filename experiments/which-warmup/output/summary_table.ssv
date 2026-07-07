@@ -1,0 +1,6 @@
+warmup boredom_pct avg_session_len post_wp_posts pct_prolif mean_reposts pct_indirect pct_multilevel
+0.5 52.6 164.2 168482 17.7 1.79 13.9 17.9
+1.0 52.6 164.7 167798 18.2 1.75 14.1 17.9
+5.0 48.1 178.4 94556 36.9 1.73 0.7 1.1
+10.0 47.4 180.5 88446 40.9 1.68 0.4 0.6
+100.0 45.7 185.8 84978 45.9 1.62 0.2 0.3

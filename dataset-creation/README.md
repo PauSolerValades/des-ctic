@@ -30,6 +30,42 @@ Features:
 - total_swaps: timeline swaps
 - duration: simulation duration
 
+### Users Dataset
+
+Per-user aggregates built from sessions.parquet and the raw traces. One row per user per run.
+
+Features:
+- run_id (pk)
+- user_id (pk)
+- num_sessions
+- total_reposts
+- total_likes
+- total_actions: reposts + likes
+- total_posts_created
+- total_swaps: how many times the timeline was refreshed
+- avg_session_length
+- total_online_time: sum of all session durations
+- boredom_ended_sessions: how many sessions ended with an empty backlog
+
+
+### Sessions Dataset
+
+One row per session. Timestamps, duration, and per-session action counts.
+
+Features:
+- run_id (pk)
+- user_id (pk)
+- session_num (pk): session index per user within a run
+- start_time
+- end_time
+- duration: end_time - start_time
+- ended_by_boredom: true if the session ended with an empty backlog
+- total_actions: likes + reposts + ignores during this session
+- total_likes
+- total_reposts
+- total_ignores
+
+
 ### Post Metrics
 
 Per-post metric breakdown.
@@ -63,8 +99,8 @@ Features:
 Computation of the normal aggregated metrics of post lifetime analysis. This is obtained from the global_gap metric from the upper dataset, so it's technically not raw.
 
 Features:
-- run_id
-- post_id
+- run_id (pk)
+- post_id (pk)
 - author_id
 - creation_time
 - last_repost
@@ -164,45 +200,6 @@ Features:
 - gap_trend: slope of hop gaps (positive = deceleration toward leaf)
 
 _Caution_: root-to-leaf paths are not independent, unlike broadcast groups which don't share data. Every parent's broadcast pattern is measured once. Paths can be reconstructed from broadcast groups, but not the reverse.
-
-### Sessions Dataset
-
-Metrics rellevant per every single sessions.
-
-Features:
-- run_id
-- user_id
-- start_time
-- end_time
-- %_time_online
-- average_session_duration
-- boredom_ended_session
-- out_degree
-- total_actions
-- total_likes
-- total_reposts
-- total_creation
-- num_session
-- ended_by_boredom
-
-
-### Users Dataset
-
-As every user has a different `session_duration`, `inter_session_length`, `inter_post_creation` so an aggregating dataset per user can be made. This is definitely conveying new information, but it can act as a validation check for several metrics. To create it needs from the session datasets, defined in last section.
-
-Features:
-- user_id (pk)
-- total_reposts
-- total_likes
-- total_different_posts_seen: count all the users that propagated to the current user
-- in_degree: how many people does the user follow
-- out_degree: how many followers does the user has
-- avg_session_length
-- avg_gap_length:
-- total_posts_created
-- total_swaps: how many times the timeline have swapped (a refresh) 
-- boredom_ended_sessions: how many session ended due to the swap to an empty timeline
-
 ## TODO:
 
 Know architecutre fixes for DuckDB based cascade generation:

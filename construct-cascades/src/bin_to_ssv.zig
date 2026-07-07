@@ -27,7 +27,7 @@ pub fn processRepost(io: Io, id: usize, bucket_writers: []*Io.Writer, traceDir: 
     const trace = &trace_reader.interface;
 
     while (try nextTrace(traces.TraceAction, trace)) |pc| {
-        if (pc.type == .repost) continue;
+        if (pc.type == .ignore) continue;
 
         const hashed_id = std.hash.Wyhash.hash(0, std.mem.asBytes(&pc.post_id));
         const bucket_id = hashed_id % bucket_writers.len;

@@ -14,7 +14,11 @@ const Event = struct {
 const KeyVal = struct { key: CascadeKey, events: std.ArrayListUnmanaged(Event) };
 
 pub fn mergeBuckets(io: Io, gpa: Allocator, num_buckets: usize, buckets_path: []const u8, output_path: []const u8, stderr: *Io.Writer) (error{ WriteFailed, OutOfMemory } || Io.Dir.OpenError || Io.File.OpenError)!void {
-    const buckets_dir = try Io.Dir.cwd().openDir(io, "buckets", .{});
+    const buckets_dir = Io.Dir.cwd().openDir(io, buckets_path, .{}) catch |err| {
+        try stderr.print("Error opening buckets dir '{s}': {}\n", .{ buckets_path, err });
+        try stderr.flush();
+        return err;
+    };
     defer buckets_dir.close(io);
 
     // Single streaming writer for cascades.ssv — OS controls the offset.
@@ -88,13 +92,7 @@ pub fn mergeBuckets(io: Io, gpa: Allocator, num_buckets: usize, buckets_path: []
             gpa.free(sorted);
         }
 
-        const sorted_likes = try gpa.alloc(KeyVal, like_map.count());
-        defer {
-            for (sorted_likes) |*kv| kv.events.deinit(gpa);
-            gpa.free(sorted_likes);
-        }
         sortBucketCascades(&map, sorted);
-        sortBucketCascades(&like_map, sorted_likes);
 
         for (sorted) |kv| {
             total_lines += kv.events.items.len;
@@ -104,6 +102,13 @@ pub fn mergeBuckets(io: Io, gpa: Allocator, num_buckets: usize, buckets_path: []
             }
         }
 
+        const sorted_likes = try gpa.alloc(KeyVal, like_map.count());
+        defer {
+            for (sorted_likes) |*kv| kv.events.deinit(gpa);
+            gpa.free(sorted_likes);
+        }
+
+        sortBucketCascades(&like_map, sorted_likes);
         for (sorted_likes) |kv| {
             total_lines += kv.events.items.len;
             for (kv.events.items) |ev| {

@@ -6,11 +6,11 @@ COPY (
     s.run_id          AS run_id,
     s.uid             AS user_id,
     s.num_sessions,
-    COALESCE(a.total_reposts, 0)        AS total_reposts,
-    COALESCE(a.total_likes, 0)          AS total_likes,
-    COALESCE(a.total_actions, 0)        AS total_actions,
+    s.total_reposts,
+    s.total_likes,
+    s.total_actions,
     COALESCE(cr.total_posts_created, 0) AS total_posts_created,
-    COALESCE(sw.total_swaps, 0)          AS total_swaps,
+    COALESCE(sw.total_swaps, 0)         AS total_swaps,
     s.avg_session_length,
     s.total_online_time,
     s.boredom_ended_sessions
@@ -20,20 +20,13 @@ COPY (
            COUNT(*)                          AS num_sessions,
            AVG(duration)                     AS avg_session_length,
            SUM(duration)                     AS total_online_time,
-           SUM(CASE WHEN ended_by_boredom THEN 1 ELSE 0 END) AS boredom_ended_sessions
+           SUM(CASE WHEN ended_by_boredom THEN 1 ELSE 0 END) AS boredom_ended_sessions,
+           SUM(total_actions)                AS total_actions,
+           SUM(total_likes)                  AS total_likes,
+           SUM(total_reposts)                AS total_reposts
     FROM read_parquet('{{.OutputDir}}/sessions.parquet')
     GROUP BY run_id, uid
   ) s
-
-  LEFT JOIN (
-    SELECT regexp_extract(filename, '/(\d+)-', 1)::INTEGER AS run_id,
-           user_id AS auid,
-           COUNT(*)                                   AS total_actions,
-           COUNT(*) FILTER (WHERE type = 'repost')    AS total_reposts,
-           COUNT(*) FILTER (WHERE type = 'like')      AS total_likes
-    FROM read_json('{{.TracesDir}}/*-action_trace.jsonl', filename=true, ignore_errors=true)
-    GROUP BY 1, 2
-  ) a ON s.run_id = a.run_id AND s.uid = a.auid
 
   LEFT JOIN (
     SELECT run_id, user_id AS cruid, COUNT(*) AS total_posts_created
