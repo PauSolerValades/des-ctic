@@ -10,6 +10,8 @@ Usage:
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+
 import matplotlib.pyplot as plt
 import numpy as np
 import polars as pl
@@ -39,8 +41,6 @@ def main(config: Config) -> None:
     plot_combined_summary(all_data, config)
     plot_first_session_backlog(all_data, config)
     plot_sessions_actions(config)
-    plot_micro_comparison(all_data, config)
-
     print("\nDone.")
 
 
@@ -49,24 +49,50 @@ def main(config: Config) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _load_run(config: Config, warmup: int, run: int) -> dict[str, pl.DataFrame]:
-    """Load all trace files for a single run."""
-    base = config.traces_dir / f"{warmup:g}-ticks" / str(run)
-    SES_SCHEMA = {
-        "time": pl.Float64,
-        "event_id": pl.Int64,
-        "gen_id": pl.Int64,
-        "user_id": pl.Int64,
-        "type": pl.String,
-        "backlog": pl.Int64,
-    }
-    return {
-        "actions": pl.read_ndjson(str(base) + "-action_trace.jsonl"),
-        "creates": pl.read_ndjson(str(base) + "-create_trace.jsonl"),
-        "sessions": pl.read_ndjson(
-            str(base) + "-session_trace.jsonl", schema_overrides=SES_SCHEMA
-        ),
-    }
+CREATE_SCHEMA: dict[str, pl.DataType] = {
+    "time": pl.Float64,
+    "event_id": pl.Int64,
+    "gen_id": pl.Int64,
+    "user_id": pl.Int64,
+    "post_id": pl.Int64,
+}
+
+ACTION_SCHEMA: dict[str, pl.DataType] = {
+    "time": pl.Float64,
+    "event_id": pl.Int64,
+    "gen_id": pl.Int64,
+    "user_id": pl.Int64,
+    "post_id": pl.Int64,
+    "parent_id": pl.Int64,
+    "type": pl.String,
+}
+
+SES_SCHEMA: dict[str, pl.DataType] = {
+    "time": pl.Float64,
+    "event_id": pl.Int64,
+    "gen_id": pl.Int64,
+    "user_id": pl.Int64,
+    "type": pl.String,
+    "backlog": pl.Int64,
+}
+
+
+def _load_run(config: Config, warmup: float, run: int) -> dict[str, pl.DataFrame]:
+    """Load all trace files for a single run — parallel I/O."""
+    base = str(config.traces_dir / f"{warmup:g}-ticks" / str(run))
+
+    def _read(kind: str, schema: dict) -> pl.DataFrame:
+        return pl.read_ndjson(base + kind, schema_overrides=schema)
+
+    with ThreadPoolExecutor(max_workers=3) as ex:
+        f_actions = ex.submit(_read, "-action_trace.jsonl", ACTION_SCHEMA)
+        f_creates = ex.submit(_read, "-create_trace.jsonl", CREATE_SCHEMA)
+        f_sessions = ex.submit(_read, "-session_trace.jsonl", SES_SCHEMA)
+        return {
+            "actions": f_actions.result(),
+            "creates": f_creates.result(),
+            "sessions": f_sessions.result(),
+        }
 
 
 def load_all_runs(config: Config) -> dict[int, dict[int, dict[str, pl.DataFrame]]]:
@@ -88,25 +114,22 @@ def load_all_runs(config: Config) -> dict[int, dict[int, dict[str, pl.DataFrame]
 # ---------------------------------------------------------------------------
 
 
-def _make_post_time_map(creates: pl.DataFrame) -> dict:
-    """Build a ``{post_id: creation_time}`` lookup from a creates dataframe."""
-    return dict(zip(creates["post_id"].to_list(), creates["time"].to_list()))
-
-
-def _add_is_warmup_col(
-    actions: pl.DataFrame, creates: pl.DataFrame, warmup: int
+def _post_warmup_actions(
+    actions: pl.DataFrame, creates: pl.DataFrame, warmup: float
 ) -> pl.DataFrame:
-    """Filter actions to post-warmup and add an ``is_warmup`` boolean column."""
-    post_times = _make_post_time_map(creates)
+    """Return post-warmup actions with ``is_warmup`` column via native join.
+
+    Much faster than the old map_elements / dict-lookup approach.
+    """
     obs = actions.filter(pl.col("time") >= warmup)
-    return obs.with_columns(
-        pl.col("post_id")
-        .map_elements(
-            lambda pid: post_times.get(pid, 99999) < warmup,
-            return_dtype=pl.Boolean,
-        )
-        .alias("is_warmup")
-    )
+    return obs.join(
+        creates.select(
+            pl.col("post_id"),
+            (pl.col("time") < warmup).alias("is_warmup"),
+        ),
+        on="post_id",
+        how="left",
+    ).with_columns(pl.col("is_warmup").fill_null(False))
 
 
 def _viridis_colors(n: int) -> list:
@@ -131,23 +154,30 @@ def plot_boredom_timeline(all_data: dict, config: Config) -> None:
 
     for idx, warmup in enumerate(warmups):
         ax = axes_flat[idx]
-        all_times: list[float] = []
-
-        for run in range(config.num_runs):
-            sessions = all_data[warmup][run]["sessions"]
-            bored = sessions.filter(pl.col("type") == "end_boredom")
-            all_times.extend(bored["time"].to_list())
-
-        if not all_times:
+        # Collect all boredom times via Polars concat instead of Python list
+        parts = [
+            all_data[warmup][run]["sessions"]
+            .filter(pl.col("type") == "end_boredom")
+            .select("time")
+            for run in range(config.num_runs)
+        ]
+        all_times_df = pl.concat(parts) if parts else pl.DataFrame(schema={"time": pl.Float64})
+        if all_times_df.is_empty():
             continue
 
-        arr = np.array(all_times)
-        obs_end = warmup + 5000
-        arr = arr[(arr >= warmup) & (arr <= obs_end)]
-        rel_time = arr - warmup
+        arr = (
+            all_times_df.filter(
+                (pl.col("time") >= warmup) & (pl.col("time") <= warmup + 5000)
+            )
+            .select((pl.col("time") - warmup).alias("rel"))
+            .to_series()
+            .to_numpy()
+        )
+        if len(arr) == 0:
+            continue
 
         bins = np.logspace(np.log10(1), np.log10(5100), 50)
-        counts, _ = np.histogram(rel_time, bins=bins)
+        counts, _ = np.histogram(arr, bins=bins)
         bin_widths = np.diff(bins)
         rate = counts / bin_widths / config.num_runs
         centers = (bins[:-1] + bins[1:]) / 2
@@ -206,27 +236,35 @@ def plot_warmup_attention_decay(all_data: dict, config: Config) -> None:
             ax.set_title("warmup=0")
             continue
 
-        bin_wp: dict[int, int] = {}
-        bin_total: dict[int, int] = {}
-
+        # Native Polars binning — avoids iter_rows()
+        parts = []
         for run in range(config.num_runs):
             d = all_data[warmup][run]
-            obs = _add_is_warmup_col(d["actions"], d["creates"], warmup)
-            for row in obs.iter_rows():
-                t = row[0]  # time
-                is_wp = row[-1]  # is_warmup
-                bin_idx = int((t - warmup) // bin_size)
-                bin_total[bin_idx] = bin_total.get(bin_idx, 0) + 1
-                if is_wp:
-                    bin_wp[bin_idx] = bin_wp.get(bin_idx, 0) + 1
+            obs = _post_warmup_actions(d["actions"], d["creates"], warmup)
+            parts.append(
+                obs.select(
+                    ((pl.col("time") - warmup) // bin_size).cast(pl.Int64).alias("bin"),
+                    pl.col("is_warmup"),
+                )
+            )
+        if not parts:
+            continue
+        all_binned = pl.concat(parts)
+        agg = all_binned.group_by("bin").agg(
+            pl.len().alias("total"),
+            pl.col("is_warmup").sum().alias("wp"),
+        )
+        agg_sorted = agg.sort("bin")
 
-        max_bin = max(bin_total.keys()) if bin_total else 0
+        max_bin = agg_sorted["bin"].max()
         xs = np.arange(0, max_bin + 1) * bin_size
+        # Build aligned arrays via a join to fill missing bins with 0
+        full = pl.DataFrame({"bin": range(max_bin + 1)}).join(
+            agg_sorted, on="bin", how="left"
+        ).fill_null(0)
         ys = [
-            bin_wp.get(b, 0) / bin_total.get(b, 1) * 100
-            if bin_total.get(b, 0) > 10
-            else np.nan
-            for b in range(max_bin + 1)
+            wp / total * 100 if total > 10 else np.nan
+            for wp, total in zip(full["wp"].to_list(), full["total"].to_list())
         ]
 
         ax.plot(xs, ys, "-", color=colors[idx], linewidth=1.5, alpha=0.9)
@@ -268,36 +306,50 @@ def plot_new_post_traction(all_data: dict, config: Config) -> None:
 
     for idx, warmup in enumerate(warmups):
         ax = axes_flat[idx]
-        bin_impressions: dict[int, int] = {}
-        bin_new_posts: dict[int, int] = {}
-
+        # Native Polars binning — avoids iter_rows()
+        imp_parts, np_parts = [], []
         for run in range(config.num_runs):
             d = all_data[warmup][run]
             actions, creates = d["actions"], d["creates"]
-            obs = _add_is_warmup_col(actions, creates, warmup)
-            new_actions = obs.filter(~pl.col("is_warmup"))
+            obs = _post_warmup_actions(actions, creates, warmup)
+            imp_parts.append(
+                obs.filter(~pl.col("is_warmup"))
+                .select(((pl.col("time") - warmup) // bin_size).cast(pl.Int64).alias("bin"))
+            )
+            np_parts.append(
+                creates.filter(pl.col("time") >= warmup)
+                .select(((pl.col("time") - warmup) // bin_size).cast(pl.Int64).alias("bin"))
+            )
+        if not imp_parts:
+            continue
 
-            for row in new_actions.iter_rows():
-                t = row[0]
-                bin_idx = int((t - warmup) // bin_size)
-                bin_impressions[bin_idx] = bin_impressions.get(bin_idx, 0) + 1
-
-            new_creates = creates.filter(pl.col("time") >= warmup)
-            for row in new_creates.iter_rows():
-                t = row[0]
-                bin_idx = int((t - warmup) // bin_size)
-                bin_new_posts[bin_idx] = bin_new_posts.get(bin_idx, 0) + 1
+        imp_agg = (
+            pl.concat(imp_parts).group_by("bin").len(name="impressions").sort("bin")
+        )
+        np_agg = (
+            pl.concat(np_parts).group_by("bin").len(name="new_posts").sort("bin")
+        )
 
         max_bin = max(
-            list(bin_impressions.keys()) + list(bin_new_posts.keys()), default=0
+            imp_agg["bin"].max() if not imp_agg.is_empty() else 0,
+            np_agg["bin"].max() if not np_agg.is_empty() else 0,
         )
+        full_imp = pl.DataFrame({"bin": range(max_bin + 1)}).join(
+            imp_agg, on="bin", how="left"
+        ).fill_null(0)
+        full_np = pl.DataFrame({"bin": range(max_bin + 1)}).join(
+            np_agg, on="bin", how="left"
+        ).fill_null(0)
+
         xs = np.arange(0, max_bin + 1) * bin_size
         ys = [
-            (bin_impressions.get(b, 0) / config.num_runs)
-            / max(bin_new_posts.get(b, 0) / config.num_runs, 1)
-            if bin_new_posts.get(b, 0) > 0
+            (imp / config.num_runs) / max(np_count / config.num_runs, 1)
+            if np_count > 0
             else np.nan
-            for b in range(max_bin + 1)
+            for imp, np_count in zip(
+                full_imp["impressions"].to_list(),
+                full_np["new_posts"].to_list(),
+            )
         ]
 
         ax.plot(xs, ys, "-", color=colors[idx], linewidth=1.5, alpha=0.9)
@@ -408,147 +460,48 @@ def plot_sessions_actions(config: Config) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Plot: micro comparison (warmup 1–5)
-# ---------------------------------------------------------------------------
-
-
-def plot_micro_comparison(all_data: dict, config: Config) -> None:
-    """Focused comparison: warmup values 1–5 only."""
-    selected = [w for w in config.warmups if 1 <= w <= 5]
-    if not selected:
-        print("  [skip] micro_comparison — no warmup values in 1..5 range")
-        return
-
-    colors = {1: "#2E86AB", 2: "#A23B72", 3: "#F18F01", 4: "#C73E1D", 5: "#3CAEA3"}
-    fig, axes = plt.subplots(1, 3, figsize=(22, 6))
-
-    # 1. Boredom rate (log-log)
-    ax = axes[0]
-    for warmup in selected:
-        all_times: list[float] = []
-        for run in range(config.num_runs):
-            sessions = all_data[warmup][run]["sessions"]
-            bored = sessions.filter(pl.col("type") == "end_boredom")
-            all_times.extend(bored["time"].to_list())
-        arr = np.array(all_times)
-        arr = arr[(arr >= warmup) & (arr <= warmup + 5000)]
-        rel_time = arr - warmup
-        bins = np.logspace(np.log10(1), np.log10(5000), 60)
-        counts, _ = np.histogram(rel_time, bins=bins)
-        rate = counts / np.diff(bins) / config.num_runs
-        centers = (bins[:-1] + bins[1:]) / 2
-        ax.loglog(
-            centers,
-            rate,
-            ".-",
-            color=colors[warmup],
-            label=f"w={warmup}",
-            linewidth=1.5,
-            markersize=2,
-        )
-    ax.set_xlabel("Ticks after warmup")
-    ax.set_ylabel("Boredom ends / tick / run")
-    ax.set_title("Boredom rate (log-log)")
-    ax.legend()
-    ax.grid(True, alpha=0.2, which="both")
-
-    # 2. Warmup attention decay
-    ax = axes[1]
-    for warmup in selected:
-        bin_wp: dict[int, int] = {}
-        bin_total: dict[int, int] = {}
-        for run in range(config.num_runs):
-            d = all_data[warmup][run]
-            obs = _add_is_warmup_col(d["actions"], d["creates"], warmup)
-            for row in obs.iter_rows():
-                t, is_wp = row[0], row[-1]
-                b = int((t - warmup) // 100)
-                bin_total[b] = bin_total.get(b, 0) + 1
-                if is_wp:
-                    bin_wp[b] = bin_wp.get(b, 0) + 1
-        max_bin = max(bin_total.keys())
-        xs = np.arange(0, max_bin + 1) * 100
-        ys = [
-            bin_wp.get(b, 0) / bin_total.get(b, 1) * 100
-            if bin_total.get(b, 0) > 50
-            else np.nan
-            for b in range(max_bin + 1)
-        ]
-        ax.plot(xs, ys, "-", color=colors[warmup], label=f"w={warmup}", linewidth=1.5)
-    ax.set_xlabel("Ticks after warmup")
-    ax.set_ylabel("% actions on warmup posts")
-    ax.set_title("Warmup attention decay")
-    ax.legend()
-    ax.grid(True, alpha=0.2)
-
-    # 3. New post traction
-    ax = axes[2]
-    for warmup in selected:
-        bin_imp: dict[int, int] = {}
-        bin_np: dict[int, int] = {}
-        for run in range(config.num_runs):
-            d = all_data[warmup][run]
-            actions, creates = d["actions"], d["creates"]
-            obs = _add_is_warmup_col(actions, creates, warmup)
-            for row in obs.filter(~pl.col("is_warmup")).iter_rows():
-                b = int((row[0] - warmup) // 100)
-                bin_imp[b] = bin_imp.get(b, 0) + 1
-            for row in creates.filter(pl.col("time") >= warmup).iter_rows():
-                b = int((row[0] - warmup) // 100)
-                bin_np[b] = bin_np.get(b, 0) + 1
-        max_bin = max(list(bin_imp.keys()) + list(bin_np.keys()))
-        xs = np.arange(0, max_bin + 1) * 100
-        ys = [bin_imp.get(b, 0) / max(bin_np.get(b, 0), 1) for b in range(max_bin + 1)]
-        ax.plot(xs, ys, "-", color=colors[warmup], label=f"w={warmup}", linewidth=1.5)
-    ax.set_xlabel("Ticks after warmup")
-    ax.set_ylabel("Impressions per new post")
-    ax.set_title("New post traction")
-    ax.legend()
-    ax.grid(True, alpha=0.2)
-
-    fig.suptitle("Micro-comparison: warmup 1–5", fontsize=14, fontweight="bold")
-    fig.tight_layout()
-    fig.savefig(config.output_dir / "micro_comparison.png", dpi=150)
-    plt.close(fig)
-    print("  Saved micro_comparison.png")
-
-
-# ---------------------------------------------------------------------------
 # Plot: combined summary
 # ---------------------------------------------------------------------------
 
 
 def plot_combined_summary(all_data: dict, config: Config) -> None:
     """One summary plot: boredom + warmup attention + new post traction."""
-    selected = [w for w in config.warmups if w in (5, 25, 100, 1000)]
-    if not selected:
-        print("  [skip] combined_summary — no matching warmup values")
-        return
-
-    colors = {5: "#2E86AB", 25: "#A23B72", 100: "#F18F01", 1000: "#C73E1D"}
+    warmups = config.warmups
+    colors = _viridis_colors(len(warmups))
     fig, axes = plt.subplots(1, 3, figsize=(22, 6))
 
     # 1. Boredom rate
     ax = axes[0]
-    for warmup in selected:
-        all_times: list[float] = []
-        for run in range(config.num_runs):
-            sessions = all_data[warmup][run]["sessions"]
-            bored = sessions.filter(pl.col("type") == "end_boredom")
-            all_times.extend(bored["time"].to_list())
-        arr = np.array(all_times)
-        arr = arr[(arr >= warmup) & (arr <= warmup + 5000)]
-        rel_time = arr - warmup
+    for idx, warmup in enumerate(warmups):
+        parts = [
+            all_data[warmup][run]["sessions"]
+            .filter(pl.col("type") == "end_boredom")
+            .select("time")
+            for run in range(config.num_runs)
+        ]
+        all_times_df = pl.concat(parts) if parts else pl.DataFrame(schema={"time": pl.Float64})
+        if all_times_df.is_empty():
+            continue
+        arr = (
+            all_times_df.filter(
+                (pl.col("time") >= warmup) & (pl.col("time") <= warmup + 5000)
+            )
+            .select((pl.col("time") - warmup).alias("rel"))
+            .to_series()
+            .to_numpy()
+        )
+        if len(arr) == 0:
+            continue
         bins = np.logspace(np.log10(1), np.log10(5000), 60)
-        counts, _ = np.histogram(rel_time, bins=bins)
+        counts, _ = np.histogram(arr, bins=bins)
         rate = counts / np.diff(bins) / config.num_runs
         centers = (bins[:-1] + bins[1:]) / 2
         ax.loglog(
             centers,
             rate,
             ".-",
-            color=colors[warmup],
-            label=f"w={warmup}",
+            color=colors[idx],
+            label=f"w={warmup:g}",
             linewidth=1.5,
             markersize=2,
         )
@@ -560,27 +513,35 @@ def plot_combined_summary(all_data: dict, config: Config) -> None:
 
     # 2. Warmup attention decay
     ax = axes[1]
-    for warmup in selected:
-        bin_wp: dict[int, int] = {}
-        bin_total: dict[int, int] = {}
+    for idx, warmup in enumerate(warmups):
+        parts = []
         for run in range(config.num_runs):
             d = all_data[warmup][run]
-            obs = _add_is_warmup_col(d["actions"], d["creates"], warmup)
-            for row in obs.iter_rows():
-                t, is_wp = row[0], row[-1]
-                b = int((t - warmup) // 100)
-                bin_total[b] = bin_total.get(b, 0) + 1
-                if is_wp:
-                    bin_wp[b] = bin_wp.get(b, 0) + 1
-        max_bin = max(bin_total.keys())
+            obs = _post_warmup_actions(d["actions"], d["creates"], warmup)
+            parts.append(
+                obs.select(
+                    ((pl.col("time") - warmup) // 100).cast(pl.Int64).alias("bin"),
+                    pl.col("is_warmup"),
+                )
+            )
+        if not parts:
+            continue
+        all_binned = pl.concat(parts)
+        agg = all_binned.group_by("bin").agg(
+            pl.len().alias("total"),
+            pl.col("is_warmup").sum().alias("wp"),
+        ).sort("bin")
+
+        max_bin = agg["bin"].max()
+        full = pl.DataFrame({"bin": range(max_bin + 1)}).join(
+            agg, on="bin", how="left"
+        ).fill_null(0)
         xs = np.arange(0, max_bin + 1) * 100
         ys = [
-            bin_wp.get(b, 0) / bin_total.get(b, 1) * 100
-            if bin_total.get(b, 0) > 50
-            else np.nan
-            for b in range(max_bin + 1)
+            wp / total * 100 if total > 50 else np.nan
+            for wp, total in zip(full["wp"].to_list(), full["total"].to_list())
         ]
-        ax.plot(xs, ys, "-", color=colors[warmup], label=f"w={warmup}", linewidth=1.5)
+        ax.plot(xs, ys, "-", color=colors[idx], label=f"w={warmup:g}", linewidth=1.5)
     ax.set_xlabel("Ticks after warmup")
     ax.set_ylabel("% actions on warmup posts")
     ax.set_title("Warmup attention decay")
@@ -589,23 +550,50 @@ def plot_combined_summary(all_data: dict, config: Config) -> None:
 
     # 3. New post traction
     ax = axes[2]
-    for warmup in selected:
-        bin_imp: dict[int, int] = {}
-        bin_np: dict[int, int] = {}
+    for idx, warmup in enumerate(warmups):
+        imp_parts, np_parts = [], []
         for run in range(config.num_runs):
             d = all_data[warmup][run]
             actions, creates = d["actions"], d["creates"]
-            obs = _add_is_warmup_col(actions, creates, warmup)
-            for row in obs.filter(~pl.col("is_warmup")).iter_rows():
-                b = int((row[0] - warmup) // 100)
-                bin_imp[b] = bin_imp.get(b, 0) + 1
-            for row in creates.filter(pl.col("time") >= warmup).iter_rows():
-                b = int((row[0] - warmup) // 100)
-                bin_np[b] = bin_np.get(b, 0) + 1
-        max_bin = max(list(bin_imp.keys()) + list(bin_np.keys()))
+            obs = _post_warmup_actions(actions, creates, warmup)
+            imp_parts.append(
+                obs.filter(~pl.col("is_warmup"))
+                .select(((pl.col("time") - warmup) // 100).cast(pl.Int64).alias("bin"))
+            )
+            np_parts.append(
+                creates.filter(pl.col("time") >= warmup)
+                .select(((pl.col("time") - warmup) // 100).cast(pl.Int64).alias("bin"))
+            )
+        if not imp_parts:
+            continue
+
+        imp_agg = (
+            pl.concat(imp_parts).group_by("bin").len(name="impressions").sort("bin")
+        )
+        np_agg = (
+            pl.concat(np_parts).group_by("bin").len(name="new_posts").sort("bin")
+        )
+
+        max_bin = max(
+            imp_agg["bin"].max() if not imp_agg.is_empty() else 0,
+            np_agg["bin"].max() if not np_agg.is_empty() else 0,
+        )
+        full_imp = pl.DataFrame({"bin": range(max_bin + 1)}).join(
+            imp_agg, on="bin", how="left"
+        ).fill_null(0)
+        full_np = pl.DataFrame({"bin": range(max_bin + 1)}).join(
+            np_agg, on="bin", how="left"
+        ).fill_null(0)
+
         xs = np.arange(0, max_bin + 1) * 100
-        ys = [bin_imp.get(b, 0) / max(bin_np.get(b, 0), 1) for b in range(max_bin + 1)]
-        ax.plot(xs, ys, "-", color=colors[warmup], label=f"w={warmup}", linewidth=1.5)
+        ys = [
+            imp / max(np_count, 1)
+            for imp, np_count in zip(
+                full_imp["impressions"].to_list(),
+                full_np["new_posts"].to_list(),
+            )
+        ]
+        ax.plot(xs, ys, "-", color=colors[idx], label=f"w={warmup:g}", linewidth=1.5)
     ax.set_xlabel("Ticks after warmup")
     ax.set_ylabel("Impressions per new post")
     ax.set_title("New post traction")

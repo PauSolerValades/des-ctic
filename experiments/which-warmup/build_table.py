@@ -62,34 +62,49 @@ def main(config: Config) -> None:
     print(f"\nSaved {out_path}")
 
 
+SES_SCHEMA_OVERRIDES: dict[str, pl.DataType] = {
+    "time": pl.Float64,
+    "event_id": pl.Int64,
+    "gen_id": pl.Int64,
+    "user_id": pl.Int64,
+    "type": pl.String,
+    "backlog": pl.Int64,
+}
+
+
 def session_stats(config: Config, warmup: float) -> tuple[float, float]:
     """Return (boredom_pct, avg_session_length) for one warmup value."""
     ticks_dir = config.traces_dir / f"{warmup:g}-ticks"
-    total_boredom, total_normal, total_length, n_sessions = 0, 0, 0.0, 0
 
+    parts = []
     for run in range(config.num_runs):
         path = ticks_dir / f"{run}-session_trace.jsonl"
-        df = pl.read_ndjson(
-            str(path),
-            schema_overrides={
-                "time": pl.Float64,
-                "event_id": pl.Int64,
-                "gen_id": pl.Int64,
-                "user_id": pl.Int64,
-                "type": pl.String,
-                "backlog": pl.Int64,
-            },
-        )
-        counts = df["type"].value_counts()
-        counts_map = dict(zip(counts["type"].to_list(), counts["count"].to_list()))
-        total_boredom += counts_map.get("end_boredom", 0)
-        total_normal += counts_map.get("end", 0)
+        df = pl.read_ndjson(str(path), schema_overrides=SES_SCHEMA_OVERRIDES)
+        parts.append(df)
 
-        starts = df.filter(pl.col("type") == "start").sort("time")
-        ends = df.filter(pl.col("type").is_in(["end", "end_boredom"])).sort("time")
-        for i in range(min(starts.height, ends.height)):
-            total_length += ends["time"][i] - starts["time"][i]
-            n_sessions += 1
+    all_sessions = pl.concat(parts)
+
+    # Session end counts via native group_by
+    end_counts = (
+        all_sessions.filter(pl.col("type").is_in(["end", "end_boredom"]))
+        .group_by("type")
+        .len()
+    )
+    ec_map = dict(zip(end_counts["type"].to_list(), end_counts["len"].to_list()))
+    total_boredom = ec_map.get("end_boredom", 0)
+    total_normal = ec_map.get("end", 0)
+
+    # Session length: pair i-th start with i-th end (same as original logic)
+    start_times = all_sessions.filter(pl.col("type") == "start").sort("time")["time"]
+    end_times = all_sessions.filter(
+        pl.col("type").is_in(["end", "end_boredom"])
+    ).sort("time")["time"]
+    n_pairs = min(len(start_times), len(end_times))
+    # ponytail: O(n_pairs) zip in Python, fine unless millions of sessions
+    total_length = sum(
+        float(end_times[i]) - float(start_times[i]) for i in range(n_pairs)
+    )
+    n_sessions = n_pairs
 
     boredom_pct = (
         round(total_boredom / (total_boredom + total_normal) * 100, 1)

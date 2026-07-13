@@ -15,8 +15,6 @@ Usage:
                        --datasets ../../datasets/10K-warmup
 """
 
-from __future__ import annotations
-
 import argparse
 
 import build_table
@@ -30,30 +28,26 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Warmup experiment analysis tools.",
     )
-    sub = parser.add_subparsers(dest="command", required=True)
-
-    sub.add_parser("table", help="Generate the summary table.")
-    sub.add_parser("plots", help="Generate all temporal analysis plots.")
-    sub.add_parser("all", help="Run both table and plots.")
-
-    args, remaining = parser.parse_known_args()
 
     parser.add_argument(
-        "--traces",
+        "command",
+        help="Chose what the program will do",
+        default=all,
+    )
+
+    parser.add_argument(
+        "traces",
         type=Path,
-        required=True,
         help="Directory containing {N}-ticks/ subdirectories with trace files.",
     )
     parser.add_argument(
-        "--cascades",
+        "cascades",
         type=Path,
-        required=True,
         help="Directory containing warmup-{N}.ssv cascade files.",
     )
     parser.add_argument(
-        "--datasets",
+        "datasets",
         type=Path,
-        required=True,
         help="Directory containing warmup-{N}/ subdirectories with dataset files.",
     )
     parser.add_argument(
@@ -77,7 +71,7 @@ def main() -> None:
         help="Bin size in ticks for time-series plots (default: 50).",
     )
 
-    subargs = sub.
+    args = parser.parse_args()
 
     traces_dir: Path = args.traces.resolve()
     cascades_dir: Path = args.cascades.resolve()
