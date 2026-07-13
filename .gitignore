@@ -9,12 +9,19 @@ zig-pkg/
 
 traces/
 datasets/
-cascades/ 
+cascades/
+tmp/
 
 bskysim/data/
 
 construct-cascades/buckets
 construct-cascades/cascades.ssv
+
+# Python
+__pycache__/
+
+# Output directories
+output/
 
 # Go
 dataset-creation/dataset-creation

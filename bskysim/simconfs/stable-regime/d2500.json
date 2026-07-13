@@ -1,36 +1,30 @@
 {
   "seed": 42,
-  "horizon": 6001,
-  "duration": 5000,
-  "warmup_time": 0,
+  "horizon": 100000,
+  "duration": 2500,
+  "warmup_time": 2,
   "user_policy": {
-    "weights": [
-      0.8,
-      0.188,
-      0.012
-    ],
-    "data": [
-      "ignore",
-      "like",
-      "repost"
-    ]
+    "weights": [0.80, 0.188, 0.012 ],
+    "data": [ "ignore", "like", "repost" ]
   },
   "user_inter_action": {
     "exponential": {
-      "mean": 3
+      "mean": 3 
     }
   },
   "warmup_post_inter_creation": {
-    "constant": { 
-      "value": 1 
-    }  
+    "uniform": {
+      "min": 0,
+      "max": 2,
+      "interval": "oc"
+    }
   },
   "propagation_delay": {
     "constant": {
       "value": 1
     }
   },
-  "interaction_delay": {
+  "interaction_delay": { 
     "constant": {
       "value": 1
     }
