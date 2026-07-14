@@ -149,7 +149,7 @@ def plot_boredom_timeline(all_data: dict, config: Config) -> None:
     n_cols = 4
     n_rows = (n_warmups + n_cols - 1) // n_cols
     fig, axes = plt.subplots(n_rows, n_cols, figsize=(5 * n_cols, 4 * n_rows))
-    axes_flat = axes.flatten() if n_warmups > 1 else [axes]
+    axes_flat = axes.flatten() if hasattr(axes, 'flatten') else [axes]
     colors = _viridis_colors(n_warmups)
 
     for idx, warmup in enumerate(warmups):
@@ -216,7 +216,7 @@ def plot_warmup_attention_decay(all_data: dict, config: Config) -> None:
     n_cols = 4
     n_rows = (n_warmups + n_cols - 1) // n_cols
     fig, axes = plt.subplots(n_rows, n_cols, figsize=(5 * n_cols, 4 * n_rows))
-    axes_flat = axes.flatten() if n_warmups > 1 else [axes]
+    axes_flat = axes.flatten() if hasattr(axes, 'flatten') else [axes]
     colors = _viridis_colors(n_warmups)
     bin_size = config.bin_size
 
@@ -300,7 +300,7 @@ def plot_new_post_traction(all_data: dict, config: Config) -> None:
     n_cols = 4
     n_rows = (n_warmups + n_cols - 1) // n_cols
     fig, axes = plt.subplots(n_rows, n_cols, figsize=(5 * n_cols, 4 * n_rows))
-    axes_flat = axes.flatten() if n_warmups > 1 else [axes]
+    axes_flat = axes.flatten() if hasattr(axes, 'flatten') else [axes]
     colors = _viridis_colors(n_warmups)
     bin_size = config.bin_size
 

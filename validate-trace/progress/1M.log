@@ -1,0 +1,1603 @@
+Time Elapsed Loading Data: 59152 ms
+Time Elapsed wiring topology: 7572 ms
+Spawned batch 0 with 50 runs
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0003
+Total Events Processed      : 52901164
+Total Events Generated      : 60835141
+Total Events Dropped        : 4329597
+------ Warmup -----
+% of posts created          : 0.2986867841414758
+------- Global Post Metrics -------
+Total Likes                 : 7451340
+Total Reposts               : 475935
+Total Impressions           : 39630145
+Total Interactions          : 7927275
+Total Ignored               : 31702870
+------------- Averages ------------
+Avg Impressions / User      : 39.6301
+Global Engagement Rate      : 20.00%
+Avg Active Backlog / User   : 312.98
+Avg Total Backlog / User    : 757.90
+Var Unread Backlog          : 39272282.98
+CI Unread Backlog           : 12.28
+------------- Sessions ------------
+Total Sessions (all users)  : 3032145
+Boredom-Ended Sessions      : 2402325
+Avg session length          : 49.4717
+Avg posts / User            : 13.0700
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 0] - Execution time: 651890 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0001
+Total Events Processed      : 52907808
+Total Events Generated      : 60847668
+Total Events Dropped        : 4331290
+------ Warmup -----
+% of posts created          : 0.29917692009986435
+------- Global Post Metrics -------
+Total Likes                 : 7452952
+Total Reposts               : 474861
+Total Impressions           : 39621134
+Total Interactions          : 7927813
+Total Ignored               : 31693321
+------------- Averages ------------
+Avg Impressions / User      : 39.6211
+Global Engagement Rate      : 20.01%
+Avg Active Backlog / User   : 315.87
+Avg Total Backlog / User    : 760.87
+Var Unread Backlog          : 40903524.27
+CI Unread Backlog           : 12.54
+------------- Sessions ------------
+Total Sessions (all users)  : 3032409
+Boredom-Ended Sessions      : 2401917
+Avg session length          : 49.6400
+Avg posts / User            : 13.0659
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 1] - Execution time: 311070 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0002
+Total Events Processed      : 52791804
+Total Events Generated      : 60722712
+Total Events Dropped        : 4330009
+------ Warmup -----
+% of posts created          : 0.3002100298907432
+------- Global Post Metrics -------
+Total Likes                 : 7424879
+Total Reposts               : 473959
+Total Impressions           : 39500260
+Total Interactions          : 7898838
+Total Ignored               : 31601422
+------------- Averages ------------
+Avg Impressions / User      : 39.5002
+Global Engagement Rate      : 20.00%
+Avg Active Backlog / User   : 310.31
+Avg Total Backlog / User    : 749.54
+Var Unread Backlog          : 39078225.05
+CI Unread Backlog           : 12.25
+------------- Sessions ------------
+Total Sessions (all users)  : 3030797
+Boredom-Ended Sessions      : 2402940
+Avg session length          : 49.6902
+Avg posts / User            : 13.0330
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 2] - Execution time: 309054 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0001
+Total Events Processed      : 52744175
+Total Events Generated      : 60685769
+Total Events Dropped        : 4333533
+------ Warmup -----
+% of posts created          : 0.29947955035520846
+------- Global Post Metrics -------
+Total Likes                 : 7422724
+Total Reposts               : 474608
+Total Impressions           : 39470765
+Total Interactions          : 7897332
+Total Ignored               : 31573433
+------------- Averages ------------
+Avg Impressions / User      : 39.4707
+Global Engagement Rate      : 20.01%
+Avg Active Backlog / User   : 311.27
+Avg Total Backlog / User    : 752.54
+Var Unread Backlog          : 39950872.24
+CI Unread Backlog           : 12.39
+------------- Sessions ------------
+Total Sessions (all users)  : 3033864
+Boredom-Ended Sessions      : 2404948
+Avg session length          : 49.5071
+Avg posts / User            : 13.0101
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 3] - Execution time: 308570 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0002
+Total Events Processed      : 52649107
+Total Events Generated      : 60584546
+Total Events Dropped        : 4329722
+------ Warmup -----
+% of posts created          : 0.2995345727551655
+------- Global Post Metrics -------
+Total Likes                 : 7412048
+Total Reposts               : 472919
+Total Impressions           : 39390531
+Total Interactions          : 7884967
+Total Ignored               : 31505564
+------------- Averages ------------
+Avg Impressions / User      : 39.3905
+Global Engagement Rate      : 20.02%
+Avg Active Backlog / User   : 315.25
+Avg Total Backlog / User    : 755.81
+Var Unread Backlog          : 38473327.96
+CI Unread Backlog           : 12.16
+------------- Sessions ------------
+Total Sessions (all users)  : 3031802
+Boredom-Ended Sessions      : 2405183
+Avg session length          : 49.3524
+Avg posts / User            : 12.9924
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 4] - Execution time: 311132 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0001
+Total Events Processed      : 52691156
+Total Events Generated      : 60620417
+Total Events Dropped        : 4330054
+------ Warmup -----
+% of posts created          : 0.3007392087325885
+------- Global Post Metrics -------
+Total Likes                 : 7401253
+Total Reposts               : 473757
+Total Impressions           : 39401744
+Total Interactions          : 7875010
+Total Ignored               : 31526734
+------------- Averages ------------
+Avg Impressions / User      : 39.4017
+Global Engagement Rate      : 19.99%
+Avg Active Backlog / User   : 312.08
+Avg Total Backlog / User    : 760.24
+Var Unread Backlog          : 40594939.30
+CI Unread Backlog           : 12.49
+------------- Sessions ------------
+Total Sessions (all users)  : 3031516
+Boredom-Ended Sessions      : 2403135
+Avg session length          : 49.5248
+Avg posts / User            : 12.9974
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 5] - Execution time: 312953 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0001
+Total Events Processed      : 52914700
+Total Events Generated      : 60851432
+Total Events Dropped        : 4332793
+------ Warmup -----
+% of posts created          : 0.29917038638003396
+------- Global Post Metrics -------
+Total Likes                 : 7455132
+Total Reposts               : 475027
+Total Impressions           : 39622887
+Total Interactions          : 7930159
+Total Ignored               : 31692728
+------------- Averages ------------
+Avg Impressions / User      : 39.6228
+Global Engagement Rate      : 20.01%
+Avg Active Backlog / User   : 311.91
+Avg Total Backlog / User    : 755.13
+Var Unread Backlog          : 40172489.49
+CI Unread Backlog           : 12.42
+------------- Sessions ------------
+Total Sessions (all users)  : 3033901
+Boredom-Ended Sessions      : 2402070
+Avg session length          : 49.6386
+Avg posts / User            : 13.0600
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 6] - Execution time: 309868 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0005
+Total Events Processed      : 52923186
+Total Events Generated      : 60853690
+Total Events Dropped        : 4327730
+------ Warmup -----
+% of posts created          : 0.29968669756682464
+------- Global Post Metrics -------
+Total Likes                 : 7448414
+Total Reposts               : 476040
+Total Impressions           : 39624500
+Total Interactions          : 7924454
+Total Ignored               : 31700046
+------------- Averages ------------
+Avg Impressions / User      : 39.6244
+Global Engagement Rate      : 20.00%
+Avg Active Backlog / User   : 319.27
+Avg Total Backlog / User    : 762.86
+Var Unread Backlog          : 41433381.16
+CI Unread Backlog           : 12.62
+------------- Sessions ------------
+Total Sessions (all users)  : 3030850
+Boredom-Ended Sessions      : 2402058
+Avg session length          : 49.6384
+Avg posts / User            : 13.0737
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 7] - Execution time: 315815 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0003
+Total Events Processed      : 52857780
+Total Events Generated      : 60792574
+Total Events Dropped        : 4330730
+------ Warmup -----
+% of posts created          : 0.30005424797406793
+------- Global Post Metrics -------
+Total Likes                 : 7430296
+Total Reposts               : 475193
+Total Impressions           : 39561147
+Total Interactions          : 7905489
+Total Ignored               : 31655658
+------------- Averages ------------
+Avg Impressions / User      : 39.5611
+Global Engagement Rate      : 19.98%
+Avg Active Backlog / User   : 321.92
+Avg Total Backlog / User    : 763.15
+Var Unread Backlog          : 43218770.97
+CI Unread Backlog           : 12.89
+------------- Sessions ------------
+Total Sessions (all users)  : 3032662
+Boredom-Ended Sessions      : 2402842
+Avg session length          : 49.5861
+Avg posts / User            : 13.0450
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 8] - Execution time: 322743 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0001
+Total Events Processed      : 52690959
+Total Events Generated      : 60631027
+Total Events Dropped        : 4333851
+------ Warmup -----
+% of posts created          : 0.30002381506303183
+------- Global Post Metrics -------
+Total Likes                 : 7413438
+Total Reposts               : 472479
+Total Impressions           : 39411259
+Total Interactions          : 7885917
+Total Ignored               : 31525342
+------------- Averages ------------
+Avg Impressions / User      : 39.4112
+Global Engagement Rate      : 20.01%
+Avg Active Backlog / User   : 318.42
+Avg Total Backlog / User    : 757.66
+Var Unread Backlog          : 39981170.44
+CI Unread Backlog           : 12.39
+------------- Sessions ------------
+Total Sessions (all users)  : 3034463
+Boredom-Ended Sessions      : 2407229
+Avg session length          : 49.2927
+Avg posts / User            : 12.9879
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 9] - Execution time: 310547 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0000
+Total Events Processed      : 52649471
+Total Events Generated      : 60585855
+Total Events Dropped        : 4330503
+------ Warmup -----
+% of posts created          : 0.2982923756785961
+------- Global Post Metrics -------
+Total Likes                 : 7414307
+Total Reposts               : 473874
+Total Impressions           : 39425531
+Total Interactions          : 7888181
+Total Ignored               : 31537350
+------------- Averages ------------
+Avg Impressions / User      : 39.4255
+Global Engagement Rate      : 20.01%
+Avg Active Backlog / User   : 318.90
+Avg Total Backlog / User    : 763.19
+Var Unread Backlog          : 42529081.57
+CI Unread Backlog           : 12.78
+------------- Sessions ------------
+Total Sessions (all users)  : 3032450
+Boredom-Ended Sessions      : 2405078
+Avg session length          : 49.5718
+Avg posts / User            : 13.0012
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 10] - Execution time: 306730 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0001
+Total Events Processed      : 52752865
+Total Events Generated      : 60692470
+Total Events Dropped        : 4329606
+------ Warmup -----
+% of posts created          : 0.2994631091045178
+------- Global Post Metrics -------
+Total Likes                 : 7421078
+Total Reposts               : 473633
+Total Impressions           : 39487667
+Total Interactions          : 7894711
+Total Ignored               : 31592956
+------------- Averages ------------
+Avg Impressions / User      : 39.4876
+Global Engagement Rate      : 19.99%
+Avg Active Backlog / User   : 317.20
+Avg Total Backlog / User    : 752.53
+Var Unread Backlog          : 39786363.27
+CI Unread Backlog           : 12.36
+------------- Sessions ------------
+Total Sessions (all users)  : 3031807
+Boredom-Ended Sessions      : 2402367
+Avg session length          : 49.5869
+Avg posts / User            : 13.0245
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 11] - Execution time: 313491 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0000
+Total Events Processed      : 52973298
+Total Events Generated      : 60911463
+Total Events Dropped        : 4332508
+------ Warmup -----
+% of posts created          : 0.2991155980975143
+------- Global Post Metrics -------
+Total Likes                 : 7460816
+Total Reposts               : 476976
+Total Impressions           : 39675461
+Total Interactions          : 7937792
+Total Ignored               : 31737669
+------------- Averages ------------
+Avg Impressions / User      : 39.6754
+Global Engagement Rate      : 20.01%
+Avg Active Backlog / User   : 316.55
+Avg Total Backlog / User    : 770.17
+Var Unread Backlog          : 40037854.68
+CI Unread Backlog           : 12.40
+------------- Sessions ------------
+Total Sessions (all users)  : 3033502
+Boredom-Ended Sessions      : 2403625
+Avg session length          : 49.6518
+Avg posts / User            : 13.0791
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 12] - Execution time: 314705 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0000
+Total Events Processed      : 52761599
+Total Events Generated      : 60689761
+Total Events Dropped        : 4326298
+------ Warmup -----
+% of posts created          : 0.298942351178072
+------- Global Post Metrics -------
+Total Likes                 : 7430971
+Total Reposts               : 474786
+Total Impressions           : 39509040
+Total Interactions          : 7905757
+Total Ignored               : 31603283
+------------- Averages ------------
+Avg Impressions / User      : 39.5090
+Global Engagement Rate      : 20.01%
+Avg Active Backlog / User   : 312.78
+Avg Total Backlog / User    : 759.82
+Var Unread Backlog          : 40060171.57
+CI Unread Backlog           : 12.41
+------------- Sessions ------------
+Total Sessions (all users)  : 3028446
+Boredom-Ended Sessions      : 2398951
+Avg session length          : 49.5521
+Avg posts / User            : 13.0460
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 13] - Execution time: 304661 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0001
+Total Events Processed      : 52631126
+Total Events Generated      : 60554527
+Total Events Dropped        : 4323971
+------ Warmup -----
+% of posts created          : 0.2999379785229857
+------- Global Post Metrics -------
+Total Likes                 : 7403016
+Total Reposts               : 472212
+Total Impressions           : 39377951
+Total Interactions          : 7875228
+Total Ignored               : 31502723
+------------- Averages ------------
+Avg Impressions / User      : 39.3779
+Global Engagement Rate      : 20.00%
+Avg Active Backlog / User   : 317.43
+Avg Total Backlog / User    : 756.43
+Var Unread Backlog          : 40890600.76
+CI Unread Backlog           : 12.53
+------------- Sessions ------------
+Total Sessions (all users)  : 3027150
+Boredom-Ended Sessions      : 2399585
+Avg session length          : 49.4396
+Avg posts / User            : 13.0083
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 14] - Execution time: 309170 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0003
+Total Events Processed      : 52888842
+Total Events Generated      : 60816462
+Total Events Dropped        : 4325594
+------ Warmup -----
+% of posts created          : 0.2994819494714228
+------- Global Post Metrics -------
+Total Likes                 : 7441137
+Total Reposts               : 474621
+Total Impressions           : 39608705
+Total Interactions          : 7915758
+Total Ignored               : 31692947
+------------- Averages ------------
+Avg Impressions / User      : 39.6086
+Global Engagement Rate      : 19.98%
+Avg Active Backlog / User   : 310.29
+Avg Total Backlog / User    : 753.63
+Var Unread Backlog          : 40009559.53
+CI Unread Backlog           : 12.40
+------------- Sessions ------------
+Total Sessions (all users)  : 3029381
+Boredom-Ended Sessions      : 2399291
+Avg session length          : 49.6488
+Avg posts / User            : 13.0749
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 15] - Execution time: 306894 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0001
+Total Events Processed      : 52868684
+Total Events Generated      : 60802624
+Total Events Dropped        : 4329803
+------ Warmup -----
+% of posts created          : 0.2995774676428563
+------- Global Post Metrics -------
+Total Likes                 : 7440989
+Total Reposts               : 474257
+Total Impressions           : 39581456
+Total Interactions          : 7915246
+Total Ignored               : 31666210
+------------- Averages ------------
+Avg Impressions / User      : 39.5814
+Global Engagement Rate      : 20.00%
+Avg Active Backlog / User   : 313.89
+Avg Total Backlog / User    : 751.51
+Var Unread Backlog          : 38850208.66
+CI Unread Backlog           : 12.22
+------------- Sessions ------------
+Total Sessions (all users)  : 3031965
+Boredom-Ended Sessions      : 2402385
+Avg session length          : 49.5660
+Avg posts / User            : 13.0547
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 16] - Execution time: 301425 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0000
+Total Events Processed      : 52829658
+Total Events Generated      : 60764851
+Total Events Dropped        : 4328255
+------ Warmup -----
+% of posts created          : 0.29946434359949053
+------- Global Post Metrics -------
+Total Likes                 : 7435913
+Total Reposts               : 473709
+Total Impressions           : 39550059
+Total Interactions          : 7909622
+Total Ignored               : 31640437
+------------- Averages ------------
+Avg Impressions / User      : 39.5500
+Global Engagement Rate      : 20.00%
+Avg Active Backlog / User   : 315.04
+Avg Total Backlog / User    : 755.77
+Var Unread Backlog          : 41455057.96
+CI Unread Backlog           : 12.62
+------------- Sessions ------------
+Total Sessions (all users)  : 3032458
+Boredom-Ended Sessions      : 2404725
+Avg session length          : 49.5644
+Avg posts / User            : 13.0422
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 17] - Execution time: 304226 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0005
+Total Events Processed      : 52912142
+Total Events Generated      : 60847744
+Total Events Dropped        : 4331093
+------ Warmup -----
+% of posts created          : 0.2983708447206398
+------- Global Post Metrics -------
+Total Likes                 : 7453381
+Total Reposts               : 476986
+Total Impressions           : 39646551
+Total Interactions          : 7930367
+Total Ignored               : 31716184
+------------- Averages ------------
+Avg Impressions / User      : 39.6465
+Global Engagement Rate      : 20.00%
+Avg Active Backlog / User   : 310.19
+Avg Total Backlog / User    : 762.27
+Var Unread Backlog          : 41794742.90
+CI Unread Backlog           : 12.67
+------------- Sessions ------------
+Total Sessions (all users)  : 3032691
+Boredom-Ended Sessions      : 2400015
+Avg session length          : 49.7113
+Avg posts / User            : 13.0731
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 18] - Execution time: 305178 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0005
+Total Events Processed      : 53000691
+Total Events Generated      : 60929668
+Total Events Dropped        : 4328081
+------ Warmup -----
+% of posts created          : 0.2989532171614307
+------- Global Post Metrics -------
+Total Likes                 : 7465662
+Total Reposts               : 476830
+Total Impressions           : 39709271
+Total Interactions          : 7942492
+Total Ignored               : 31766779
+------------- Averages ------------
+Avg Impressions / User      : 39.7092
+Global Engagement Rate      : 20.00%
+Avg Active Backlog / User   : 307.18
+Avg Total Backlog / User    : 753.78
+Var Unread Backlog          : 38092642.56
+CI Unread Backlog           : 12.10
+------------- Sessions ------------
+Total Sessions (all users)  : 3031036
+Boredom-Ended Sessions      : 2401076
+Avg session length          : 49.7950
+Avg posts / User            : 13.1009
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 19] - Execution time: 303839 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0003
+Total Events Processed      : 53025797
+Total Events Generated      : 60957014
+Total Events Dropped        : 4329169
+------ Warmup -----
+% of posts created          : 0.29799283443889335
+------- Global Post Metrics -------
+Total Likes                 : 7475888
+Total Reposts               : 478068
+Total Impressions           : 39754092
+Total Interactions          : 7953956
+Total Ignored               : 31800136
+------------- Averages ------------
+Avg Impressions / User      : 39.7540
+Global Engagement Rate      : 20.01%
+Avg Active Backlog / User   : 313.78
+Avg Total Backlog / User    : 763.80
+Var Unread Backlog          : 40719563.62
+CI Unread Backlog           : 12.51
+------------- Sessions ------------
+Total Sessions (all users)  : 3031159
+Boredom-Ended Sessions      : 2398539
+Avg session length          : 49.8141
+Avg posts / User            : 13.1151
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 20] - Execution time: 305474 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0001
+Total Events Processed      : 52808269
+Total Events Generated      : 60741399
+Total Events Dropped        : 4328964
+------ Warmup -----
+% of posts created          : 0.2995152975220854
+------- Global Post Metrics -------
+Total Likes                 : 7430950
+Total Reposts               : 474934
+Total Impressions           : 39532492
+Total Interactions          : 7905884
+Total Ignored               : 31626608
+------------- Averages ------------
+Avg Impressions / User      : 39.5324
+Global Engagement Rate      : 20.00%
+Avg Active Backlog / User   : 311.05
+Avg Total Backlog / User    : 754.67
+Var Unread Backlog          : 40070515.43
+CI Unread Backlog           : 12.41
+------------- Sessions ------------
+Total Sessions (all users)  : 3030789
+Boredom-Ended Sessions      : 2400553
+Avg session length          : 49.5998
+Avg posts / User            : 13.0436
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 21] - Execution time: 304935 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0006
+Total Events Processed      : 52958957
+Total Events Generated      : 60891833
+Total Events Dropped        : 4329161
+------ Warmup -----
+% of posts created          : 0.29857244869281796
+------- Global Post Metrics -------
+Total Likes                 : 7460564
+Total Reposts               : 476215
+Total Impressions           : 39685538
+Total Interactions          : 7936779
+Total Ignored               : 31748759
+------------- Averages ------------
+Avg Impressions / User      : 39.6855
+Global Engagement Rate      : 20.00%
+Avg Active Backlog / User   : 313.17
+Avg Total Backlog / User    : 755.25
+Var Unread Backlog          : 40659346.91
+CI Unread Backlog           : 12.50
+------------- Sessions ------------
+Total Sessions (all users)  : 3030967
+Boredom-Ended Sessions      : 2400365
+Avg session length          : 49.7668
+Avg posts / User            : 13.0934
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 22] - Execution time: 305712 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0000
+Total Events Processed      : 52859387
+Total Events Generated      : 60789679
+Total Events Dropped        : 4327747
+------ Warmup -----
+% of posts created          : 0.2997127556509664
+------- Global Post Metrics -------
+Total Likes                 : 7437728
+Total Reposts               : 475125
+Total Impressions           : 39570459
+Total Interactions          : 7912853
+Total Ignored               : 31657606
+------------- Averages ------------
+Avg Impressions / User      : 39.5704
+Global Engagement Rate      : 20.00%
+Avg Active Backlog / User   : 313.88
+Avg Total Backlog / User    : 755.97
+Var Unread Backlog          : 42055540.95
+CI Unread Backlog           : 12.71
+------------- Sessions ------------
+Total Sessions (all users)  : 3030966
+Boredom-Ended Sessions      : 2402511
+Avg session length          : 49.5665
+Avg posts / User            : 13.0554
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 23] - Execution time: 302831 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0004
+Total Events Processed      : 52686514
+Total Events Generated      : 60627801
+Total Events Dropped        : 4331099
+------ Warmup -----
+% of posts created          : 0.2990074444994901
+------- Global Post Metrics -------
+Total Likes                 : 7414324
+Total Reposts               : 474138
+Total Impressions           : 39436278
+Total Interactions          : 7888462
+Total Ignored               : 31547816
+------------- Averages ------------
+Avg Impressions / User      : 39.4362
+Global Engagement Rate      : 20.00%
+Avg Active Backlog / User   : 316.84
+Avg Total Backlog / User    : 752.80
+Var Unread Backlog          : 39575760.32
+CI Unread Backlog           : 12.33
+------------- Sessions ------------
+Total Sessions (all users)  : 3034013
+Boredom-Ended Sessions      : 2405713
+Avg session length          : 49.4422
+Avg posts / User            : 12.9981
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 24] - Execution time: 303630 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0001
+Total Events Processed      : 52745998
+Total Events Generated      : 60681860
+Total Events Dropped        : 4328173
+------ Warmup -----
+% of posts created          : 0.2992120683259663
+------- Global Post Metrics -------
+Total Likes                 : 7426990
+Total Reposts               : 473745
+Total Impressions           : 39482990
+Total Interactions          : 7900735
+Total Ignored               : 31582255
+------------- Averages ------------
+Avg Impressions / User      : 39.4829
+Global Engagement Rate      : 20.01%
+Avg Active Backlog / User   : 313.09
+Avg Total Backlog / User    : 751.27
+Var Unread Backlog          : 41771403.73
+CI Unread Backlog           : 12.67
+------------- Sessions ------------
+Total Sessions (all users)  : 3032038
+Boredom-Ended Sessions      : 2402877
+Avg session length          : 49.5287
+Avg posts / User            : 13.0219
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 25] - Execution time: 306358 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0004
+Total Events Processed      : 52720973
+Total Events Generated      : 60654370
+Total Events Dropped        : 4330295
+------ Warmup -----
+% of posts created          : 0.29971068013063584
+------- Global Post Metrics -------
+Total Likes                 : 7417608
+Total Reposts               : 474084
+Total Impressions           : 39448788
+Total Interactions          : 7891692
+Total Ignored               : 31557096
+------------- Averages ------------
+Avg Impressions / User      : 39.4487
+Global Engagement Rate      : 20.00%
+Avg Active Backlog / User   : 316.26
+Avg Total Backlog / User    : 755.15
+Var Unread Backlog          : 41949084.39
+CI Unread Backlog           : 12.69
+------------- Sessions ------------
+Total Sessions (all users)  : 3032224
+Boredom-Ended Sessions      : 2405593
+Avg session length          : 49.4612
+Avg posts / User            : 13.0099
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 26] - Execution time: 302725 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0004
+Total Events Processed      : 52854990
+Total Events Generated      : 60794901
+Total Events Dropped        : 4333454
+------ Warmup -----
+% of posts created          : 0.29899632087939687
+------- Global Post Metrics -------
+Total Likes                 : 7439949
+Total Reposts               : 475474
+Total Impressions           : 39579432
+Total Interactions          : 7915423
+Total Ignored               : 31664009
+------------- Averages ------------
+Avg Impressions / User      : 39.5794
+Global Engagement Rate      : 20.00%
+Avg Active Backlog / User   : 314.21
+Avg Total Backlog / User    : 758.36
+Var Unread Backlog          : 40244227.53
+CI Unread Backlog           : 12.43
+------------- Sessions ------------
+Total Sessions (all users)  : 3034676
+Boredom-Ended Sessions      : 2404460
+Avg session length          : 49.6303
+Avg posts / User            : 13.0424
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 27] - Execution time: 305277 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0004
+Total Events Processed      : 52787637
+Total Events Generated      : 60720340
+Total Events Dropped        : 4326815
+------ Warmup -----
+% of posts created          : 0.2987146608898032
+------- Global Post Metrics -------
+Total Likes                 : 7433571
+Total Reposts               : 474295
+Total Impressions           : 39539643
+Total Interactions          : 7907866
+Total Ignored               : 31631777
+------------- Averages ------------
+Avg Impressions / User      : 39.5396
+Global Engagement Rate      : 20.00%
+Avg Active Backlog / User   : 316.29
+Avg Total Backlog / User    : 758.66
+Var Unread Backlog          : 41594694.18
+CI Unread Backlog           : 12.64
+------------- Sessions ------------
+Total Sessions (all users)  : 3029336
+Boredom-Ended Sessions      : 2399648
+Avg session length          : 49.6099
+Avg posts / User            : 13.0522
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 28] - Execution time: 302614 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0002
+Total Events Processed      : 52849525
+Total Events Generated      : 60779993
+Total Events Dropped        : 4327581
+------ Warmup -----
+% of posts created          : 0.299363723709955
+------- Global Post Metrics -------
+Total Likes                 : 7440913
+Total Reposts               : 474711
+Total Impressions           : 39573589
+Total Interactions          : 7915624
+Total Ignored               : 31657965
+------------- Averages ------------
+Avg Impressions / User      : 39.5735
+Global Engagement Rate      : 20.00%
+Avg Active Backlog / User   : 316.96
+Avg Total Backlog / User    : 761.06
+Var Unread Backlog          : 41357946.02
+CI Unread Backlog           : 12.60
+------------- Sessions ------------
+Total Sessions (all users)  : 3029284
+Boredom-Ended Sessions      : 2399667
+Avg session length          : 49.6434
+Avg posts / User            : 13.0637
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 29] - Execution time: 303253 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0000
+Total Events Processed      : 52786657
+Total Events Generated      : 60722806
+Total Events Dropped        : 4330338
+------ Warmup -----
+% of posts created          : 0.2992995537454473
+------- Global Post Metrics -------
+Total Likes                 : 7425935
+Total Reposts               : 474431
+Total Impressions           : 39517909
+Total Interactions          : 7900366
+Total Ignored               : 31617543
+------------- Averages ------------
+Avg Impressions / User      : 39.5178
+Global Engagement Rate      : 19.99%
+Avg Active Backlog / User   : 314.37
+Avg Total Backlog / User    : 761.59
+Var Unread Backlog          : 40612515.14
+CI Unread Backlog           : 12.49
+------------- Sessions ------------
+Total Sessions (all users)  : 3033242
+Boredom-Ended Sessions      : 2406170
+Avg session length          : 49.5156
+Avg posts / User            : 13.0283
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 30] - Execution time: 306159 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0000
+Total Events Processed      : 52693785
+Total Events Generated      : 60626217
+Total Events Dropped        : 4329751
+------ Warmup -----
+% of posts created          : 0.3005298236309383
+------- Global Post Metrics -------
+Total Likes                 : 7405705
+Total Reposts               : 473083
+Total Impressions           : 39408369
+Total Interactions          : 7878788
+Total Ignored               : 31529581
+------------- Averages ------------
+Avg Impressions / User      : 39.4083
+Global Engagement Rate      : 19.99%
+Avg Active Backlog / User   : 320.02
+Avg Total Backlog / User    : 762.25
+Var Unread Backlog          : 42092682.86
+CI Unread Backlog           : 12.72
+------------- Sessions ------------
+Total Sessions (all users)  : 3031578
+Boredom-Ended Sessions      : 2405290
+Avg session length          : 49.4506
+Avg posts / User            : 12.9993
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 31] - Execution time: 302929 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0001
+Total Events Processed      : 52940398
+Total Events Generated      : 60868503
+Total Events Dropped        : 4326283
+------ Warmup -----
+% of posts created          : 0.29920556900580886
+------- Global Post Metrics -------
+Total Likes                 : 7454057
+Total Reposts               : 475973
+Total Impressions           : 39656438
+Total Interactions          : 7930030
+Total Ignored               : 31726408
+------------- Averages ------------
+Avg Impressions / User      : 39.6564
+Global Engagement Rate      : 20.00%
+Avg Active Backlog / User   : 312.27
+Avg Total Backlog / User    : 756.26
+Var Unread Backlog          : 39475944.18
+CI Unread Backlog           : 12.31
+------------- Sessions ------------
+Total Sessions (all users)  : 3029095
+Boredom-Ended Sessions      : 2398535
+Avg session length          : 49.8062
+Avg posts / User            : 13.0918
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 32] - Execution time: 303282 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0000
+Total Events Processed      : 52682406
+Total Events Generated      : 60618728
+Total Events Dropped        : 4330298
+------ Warmup -----
+% of posts created          : 0.2997345767186626
+------- Global Post Metrics -------
+Total Likes                 : 7410194
+Total Reposts               : 473301
+Total Impressions           : 39417123
+Total Interactions          : 7883495
+Total Ignored               : 31533628
+------------- Averages ------------
+Avg Impressions / User      : 39.4170
+Global Engagement Rate      : 20.00%
+Avg Active Backlog / User   : 319.32
+Avg Total Backlog / User    : 760.85
+Var Unread Backlog          : 42667849.20
+CI Unread Backlog           : 12.80
+------------- Sessions ------------
+Total Sessions (all users)  : 3032353
+Boredom-Ended Sessions      : 2404229
+Avg session length          : 49.4686
+Avg posts / User            : 12.9989
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 33] - Execution time: 306505 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0001
+Total Events Processed      : 52686527
+Total Events Generated      : 60615938
+Total Events Dropped        : 4327630
+------ Warmup -----
+% of posts created          : 0.2994903725889716
+------- Global Post Metrics -------
+Total Likes                 : 7411316
+Total Reposts               : 473392
+Total Impressions           : 39431732
+Total Interactions          : 7884708
+Total Ignored               : 31547024
+------------- Averages ------------
+Avg Impressions / User      : 39.4317
+Global Engagement Rate      : 20.00%
+Avg Active Backlog / User   : 311.10
+Avg Total Backlog / User    : 752.52
+Var Unread Backlog          : 39715733.56
+CI Unread Backlog           : 12.35
+------------- Sessions ------------
+Total Sessions (all users)  : 3030457
+Boredom-Ended Sessions      : 2403047
+Avg session length          : 49.4240
+Avg posts / User            : 13.0118
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 34] - Execution time: 300953 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0000
+Total Events Processed      : 52700795
+Total Events Generated      : 60642031
+Total Events Dropped        : 4329185
+------ Warmup -----
+% of posts created          : 0.29972955944963503
+------- Global Post Metrics -------
+Total Likes                 : 7413017
+Total Reposts               : 472907
+Total Impressions           : 39436360
+Total Interactions          : 7885924
+Total Ignored               : 31550436
+------------- Averages ------------
+Avg Impressions / User      : 39.4363
+Global Engagement Rate      : 20.00%
+Avg Active Backlog / User   : 315.79
+Avg Total Backlog / User    : 753.24
+Var Unread Backlog          : 40378727.49
+CI Unread Backlog           : 12.45
+------------- Sessions ------------
+Total Sessions (all users)  : 3031110
+Boredom-Ended Sessions      : 2403313
+Avg session length          : 49.5685
+Avg posts / User            : 13.0105
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 35] - Execution time: 302740 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0000
+Total Events Processed      : 52542310
+Total Events Generated      : 60477312
+Total Events Dropped        : 4330110
+------ Warmup -----
+% of posts created          : 0.30010217829596236
+------- Global Post Metrics -------
+Total Likes                 : 7389432
+Total Reposts               : 471364
+Total Impressions           : 39286162
+Total Interactions          : 7860796
+Total Ignored               : 31425366
+------------- Averages ------------
+Avg Impressions / User      : 39.2861
+Global Engagement Rate      : 20.01%
+Avg Active Backlog / User   : 314.43
+Avg Total Backlog / User    : 752.57
+Var Unread Backlog          : 43307158.49
+CI Unread Backlog           : 12.90
+------------- Sessions ------------
+Total Sessions (all users)  : 3032551
+Boredom-Ended Sessions      : 2406817
+Avg session length          : 49.3120
+Avg posts / User            : 12.9548
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 36] - Execution time: 301378 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0003
+Total Events Processed      : 52756976
+Total Events Generated      : 60697259
+Total Events Dropped        : 4329553
+------ Warmup -----
+% of posts created          : 0.2994756845470998
+------- Global Post Metrics -------
+Total Likes                 : 7423494
+Total Reposts               : 473773
+Total Impressions           : 39485893
+Total Interactions          : 7897267
+Total Ignored               : 31588626
+------------- Averages ------------
+Avg Impressions / User      : 39.4858
+Global Engagement Rate      : 20.00%
+Avg Active Backlog / User   : 310.72
+Avg Total Backlog / User    : 749.38
+Var Unread Backlog          : 40884185.93
+CI Unread Backlog           : 12.53
+------------- Sessions ------------
+Total Sessions (all users)  : 3033037
+Boredom-Ended Sessions      : 2404568
+Avg session length          : 49.5724
+Avg posts / User            : 13.0186
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 37] - Execution time: 301925 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0001
+Total Events Processed      : 52823819
+Total Events Generated      : 60752163
+Total Events Dropped        : 4326591
+------ Warmup -----
+% of posts created          : 0.29929721594571285
+------- Global Post Metrics -------
+Total Likes                 : 7436918
+Total Reposts               : 475181
+Total Impressions           : 39553994
+Total Interactions          : 7912099
+Total Ignored               : 31641895
+------------- Averages ------------
+Avg Impressions / User      : 39.5539
+Global Engagement Rate      : 20.00%
+Avg Active Backlog / User   : 313.94
+Avg Total Backlog / User    : 762.99
+Var Unread Backlog          : 40330583.60
+CI Unread Backlog           : 12.45
+------------- Sessions ------------
+Total Sessions (all users)  : 3028613
+Boredom-Ended Sessions      : 2398920
+Avg session length          : 49.6677
+Avg posts / User            : 13.0601
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 38] - Execution time: 303658 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0001
+Total Events Processed      : 52817312
+Total Events Generated      : 60754091
+Total Events Dropped        : 4330898
+------ Warmup -----
+% of posts created          : 0.2997161002239113
+------- Global Post Metrics -------
+Total Likes                 : 7430212
+Total Reposts               : 475183
+Total Impressions           : 39532218
+Total Interactions          : 7905395
+Total Ignored               : 31626823
+------------- Averages ------------
+Avg Impressions / User      : 39.5321
+Global Engagement Rate      : 20.00%
+Avg Active Backlog / User   : 317.91
+Avg Total Backlog / User    : 767.37
+Var Unread Backlog          : 41903958.96
+CI Unread Backlog           : 12.69
+------------- Sessions ------------
+Total Sessions (all users)  : 3032410
+Boredom-Ended Sessions      : 2402094
+Avg session length          : 49.4853
+Avg posts / User            : 13.0366
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 39] - Execution time: 306444 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0002
+Total Events Processed      : 53223411
+Total Events Generated      : 61155758
+Total Events Dropped        : 4326502
+------ Warmup -----
+% of posts created          : 0.29841326309291716
+------- Global Post Metrics -------
+Total Likes                 : 7503050
+Total Reposts               : 480182
+Total Impressions           : 39914989
+Total Interactions          : 7983232
+Total Ignored               : 31931757
+------------- Averages ------------
+Avg Impressions / User      : 39.9149
+Global Engagement Rate      : 20.00%
+Avg Active Backlog / User   : 318.18
+Avg Total Backlog / User    : 766.51
+Var Unread Backlog          : 42099558.49
+CI Unread Backlog           : 12.72
+------------- Sessions ------------
+Total Sessions (all users)  : 3029266
+Boredom-Ended Sessions      : 2393354
+Avg session length          : 50.1218
+Avg posts / User            : 13.1765
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 40] - Execution time: 305056 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0000
+Total Events Processed      : 52969166
+Total Events Generated      : 60905795
+Total Events Dropped        : 4329568
+------ Warmup -----
+% of posts created          : 0.29842692206932114
+------- Global Post Metrics -------
+Total Likes                 : 7466375
+Total Reposts               : 476573
+Total Impressions           : 39692829
+Total Interactions          : 7942948
+Total Ignored               : 31749881
+------------- Averages ------------
+Avg Impressions / User      : 39.6927
+Global Engagement Rate      : 20.01%
+Avg Active Backlog / User   : 317.57
+Avg Total Backlog / User    : 759.33
+Var Unread Backlog          : 41591070.59
+CI Unread Backlog           : 12.64
+------------- Sessions ------------
+Total Sessions (all users)  : 3031860
+Boredom-Ended Sessions      : 2401816
+Avg session length          : 49.7690
+Avg posts / User            : 13.0919
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 41] - Execution time: 302957 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0001
+Total Events Processed      : 52830707
+Total Events Generated      : 60764895
+Total Events Dropped        : 4331389
+------ Warmup -----
+% of posts created          : 0.2988359040916353
+------- Global Post Metrics -------
+Total Likes                 : 7440449
+Total Reposts               : 475186
+Total Impressions           : 39566772
+Total Interactions          : 7915635
+Total Ignored               : 31651137
+------------- Averages ------------
+Avg Impressions / User      : 39.5667
+Global Engagement Rate      : 20.01%
+Avg Active Backlog / User   : 314.61
+Avg Total Backlog / User    : 758.19
+Var Unread Backlog          : 40632690.91
+CI Unread Backlog           : 12.49
+------------- Sessions ------------
+Total Sessions (all users)  : 3031479
+Boredom-Ended Sessions      : 2402526
+Avg session length          : 49.5667
+Avg posts / User            : 13.0520
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 42] - Execution time: 305738 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0000
+Total Events Processed      : 52775844
+Total Events Generated      : 60710204
+Total Events Dropped        : 4331105
+------ Warmup -----
+% of posts created          : 0.29948916572010253
+------- Global Post Metrics -------
+Total Likes                 : 7426735
+Total Reposts               : 473367
+Total Impressions           : 39505185
+Total Interactions          : 7900102
+Total Ignored               : 31605083
+------------- Averages ------------
+Avg Impressions / User      : 39.5051
+Global Engagement Rate      : 20.00%
+Avg Active Backlog / User   : 305.66
+Avg Total Backlog / User    : 747.70
+Var Unread Backlog          : 38159133.91
+CI Unread Backlog           : 12.11
+------------- Sessions ------------
+Total Sessions (all users)  : 3031741
+Boredom-Ended Sessions      : 2402831
+Avg session length          : 49.6407
+Avg posts / User            : 13.0305
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 43] - Execution time: 300072 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0002
+Total Events Processed      : 52886579
+Total Events Generated      : 60818412
+Total Events Dropped        : 4326887
+------ Warmup -----
+% of posts created          : 0.29819325832668614
+------- Global Post Metrics -------
+Total Likes                 : 7451164
+Total Reposts               : 475181
+Total Impressions           : 39636164
+Total Interactions          : 7926345
+Total Ignored               : 31709819
+------------- Averages ------------
+Avg Impressions / User      : 39.6361
+Global Engagement Rate      : 20.00%
+Avg Active Backlog / User   : 314.77
+Avg Total Backlog / User    : 758.69
+Var Unread Backlog          : 41100386.75
+CI Unread Backlog           : 12.57
+------------- Sessions ------------
+Total Sessions (all users)  : 3030704
+Boredom-Ended Sessions      : 2402077
+Avg session length          : 49.6701
+Avg posts / User            : 13.0782
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 44] - Execution time: 306014 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0000
+Total Events Processed      : 52841308
+Total Events Generated      : 60786655
+Total Events Dropped        : 4338475
+------ Warmup -----
+% of posts created          : 0.29917224848971163
+------- Global Post Metrics -------
+Total Likes                 : 7435911
+Total Reposts               : 474390
+Total Impressions           : 39559377
+Total Interactions          : 7910301
+Total Ignored               : 31649076
+------------- Averages ------------
+Avg Impressions / User      : 39.5593
+Global Engagement Rate      : 20.00%
+Avg Active Backlog / User   : 310.33
+Avg Total Backlog / User    : 750.64
+Var Unread Backlog          : 40210641.65
+CI Unread Backlog           : 12.43
+------------- Sessions ------------
+Total Sessions (all users)  : 3037618
+Boredom-Ended Sessions      : 2409867
+Avg session length          : 49.4607
+Avg posts / User            : 13.0232
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 45] - Execution time: 303719 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0002
+Total Events Processed      : 52937899
+Total Events Generated      : 60871756
+Total Events Dropped        : 4329517
+------ Warmup -----
+% of posts created          : 0.29818855013252915
+------- Global Post Metrics -------
+Total Likes                 : 7458130
+Total Reposts               : 476685
+Total Impressions           : 39676405
+Total Interactions          : 7934815
+Total Ignored               : 31741590
+------------- Averages ------------
+Avg Impressions / User      : 39.6763
+Global Engagement Rate      : 20.00%
+Avg Active Backlog / User   : 311.29
+Avg Total Backlog / User    : 759.03
+Var Unread Backlog          : 39965326.02
+CI Unread Backlog           : 12.39
+------------- Sessions ------------
+Total Sessions (all users)  : 3031865
+Boredom-Ended Sessions      : 2399297
+Avg session length          : 49.7366
+Avg posts / User            : 13.0865
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 46] - Execution time: 304687 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0001
+Total Events Processed      : 52750462
+Total Events Generated      : 60688594
+Total Events Dropped        : 4330969
+------ Warmup -----
+% of posts created          : 0.2985899284202439
+------- Global Post Metrics -------
+Total Likes                 : 7428012
+Total Reposts               : 474588
+Total Impressions           : 39503668
+Total Interactions          : 7902600
+Total Ignored               : 31601068
+------------- Averages ------------
+Avg Impressions / User      : 39.5036
+Global Engagement Rate      : 20.00%
+Avg Active Backlog / User   : 313.50
+Avg Total Backlog / User    : 757.60
+Var Unread Backlog          : 39970132.49
+CI Unread Backlog           : 12.39
+------------- Sessions ------------
+Total Sessions (all users)  : 3032859
+Boredom-Ended Sessions      : 2401979
+Avg session length          : 49.5540
+Avg posts / User            : 13.0252
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 47] - Execution time: 304141 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0000
+Total Events Processed      : 52764997
+Total Events Generated      : 60695914
+Total Events Dropped        : 4330851
+------ Warmup -----
+% of posts created          : 0.30063744805271564
+------- Global Post Metrics -------
+Total Likes                 : 7420025
+Total Reposts               : 472280
+Total Impressions           : 39463990
+Total Interactions          : 7892305
+Total Ignored               : 31571685
+------------- Averages ------------
+Avg Impressions / User      : 39.4639
+Global Engagement Rate      : 20.00%
+Avg Active Backlog / User   : 308.43
+Avg Total Backlog / User    : 753.35
+Var Unread Backlog          : 38008081.29
+CI Unread Backlog           : 12.08
+------------- Sessions ------------
+Total Sessions (all users)  : 3032314
+Boredom-Ended Sessions      : 2402940
+Avg session length          : 49.5569
+Avg posts / User            : 13.0145
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 48] - Execution time: 305317 ms
+
++---------------------------------+
+| SOCIAL NETWORK SIMULATION STATS |
++---------------------------------+
+Simulation Duration (T)     : 6000.0003
+Total Events Processed      : 52995709
+Total Events Generated      : 60933478
+Total Events Dropped        : 4330545
+------ Warmup -----
+% of posts created          : 0.2988404039201847
+------- Global Post Metrics -------
+Total Likes                 : 7465492
+Total Reposts               : 475911
+Total Impressions           : 39705254
+Total Interactions          : 7941403
+Total Ignored               : 31763851
+------------- Averages ------------
+Avg Impressions / User      : 39.7052
+Global Engagement Rate      : 20.00%
+Avg Active Backlog / User   : 311.61
+Avg Total Backlog / User    : 756.16
+Var Unread Backlog          : 40088618.42
+CI Unread Backlog           : 12.41
+------------- Sessions ------------
+Total Sessions (all users)  : 3033410
+Boredom-Ended Sessions      : 2401005
+Avg session length          : 49.6856
+Avg posts / User            : 13.0893
+Timeline Drain Ratio        : 0.79
++---------------------------------+
+
+[Batch 0 - 49] - Execution time: 303078 ms

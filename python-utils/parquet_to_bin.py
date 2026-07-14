@@ -68,9 +68,15 @@ def main() -> None:
 
     print(f"Reading: {inp}  ->  {out}")
 
-    users = read_u32_col(inp, "nodes.parquet", "int_id")
-    induced_a = read_u32_col(inp, "induced_edges.parquet", "actor_id")
-    induced_s = read_u32_col(inp, "induced_edges.parquet", "subject_id")
+    users_orig = read_u32_col(inp, "nodes.parquet", "int_id")
+    induced_a_orig = read_u32_col(inp, "induced_edges.parquet", "actor_id")
+    induced_s_orig = read_u32_col(inp, "induced_edges.parquet", "subject_id")
+
+    # Remap user IDs to 0..num_users-1 (bskysim expects 0-indexed sequential IDs)
+    id_map = {orig: i for i, orig in enumerate(users_orig)}
+    users = list(range(len(users_orig)))
+    induced_a = [id_map[a] for a in induced_a_orig]
+    induced_s = [id_map[s] for s in induced_s_orig]
 
     # Deduplicate edges
     seen = set()
