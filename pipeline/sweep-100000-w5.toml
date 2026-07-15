@@ -1,0 +1,17 @@
+bskysim = "../bskysim/zig-out/bin/bskysim"
+construct_cascade = "../construct-cascades/zig-out/bin/construct-cascade"
+dataset_creation = "../dataset-creation/dataset-creation"
+
+data = "../bskysim/data/100000/size_monotonic.bin"
+runs = 12
+workers = 2
+
+traces_dir = "traces"
+cascades_dir = "cascades"
+datasets_dir = "datasets"
+buckets = 256
+temp_dir = "/tmp/cascade-building"
+
+[[configs]]
+name = "100000-warmup-5"
+path = "../bskysim/simconfs/warmup-sweep-5.json"
