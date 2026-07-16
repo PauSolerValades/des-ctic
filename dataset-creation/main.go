@@ -211,7 +211,7 @@ func readSSV(path string) ([]cascade.Root, []cascade.Repost, error) {
 	defer f.Close()
 
 	r := csv.NewReader(f)
-	r.Comma = ' '
+	r.Comma = '\t'
 	r.FieldsPerRecord = 6
 	r.ReuseRecord = true
 

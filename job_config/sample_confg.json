@@ -12,5 +12,12 @@
     "bucket_file": null,
     "output_file": "steps/cascades/10K_run.tsv",
     "traces_dir": "steps/traces/10K_run"
+  },
+  "dataset": {
+    "output_dir": "steps/datasets/10K_run",
+    "cascades_ssv": "steps/cascades/10K_run.tsv",
+    "likes_ssv": "steps/cascades/10K_run_likes.tsv",
+    "traces_dir": "steps/traces/10K_run",
+    "dataset": "all"
   }
 }

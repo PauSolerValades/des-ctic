@@ -23,7 +23,7 @@ COPY (
   ),
   creations AS (
     SELECT run_id, post_id AS cpid, time AS creation_time
-    FROM read_csv('{{.CascadesSSV}}', sep=' ', header=true,
+    FROM read_csv('{{.CascadesSSV}}', sep='\t', header=true,
       columns={'run_id': 'INTEGER', 'post_id': 'INTEGER', 'user_id': 'INTEGER',
                'parent_id': 'INTEGER', 'type': 'VARCHAR', 'time': 'DOUBLE'},
       auto_detect=false)

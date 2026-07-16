@@ -7,7 +7,7 @@ COPY (
     SELECT DISTINCT
       run_id,
       post_id
-    FROM read_csv('{{.CascadesSSV}}', sep=' ', header=true,
+    FROM read_csv('{{.CascadesSSV}}', sep='\t', header=true,
       columns={'run_id': 'INTEGER', 'post_id': 'INTEGER', 'user_id': 'INTEGER',
                'parent_id': 'INTEGER', 'type': 'VARCHAR', 'time': 'DOUBLE'},
       auto_detect=false)
@@ -18,7 +18,7 @@ COPY (
       run_id,
       post_id,
       user_id AS author_id
-    FROM read_csv('{{.CascadesSSV}}', sep=' ', header=true,
+    FROM read_csv('{{.CascadesSSV}}', sep='\t', header=true,
       columns={'run_id': 'INTEGER', 'post_id': 'INTEGER', 'user_id': 'INTEGER',
                'parent_id': 'INTEGER', 'type': 'VARCHAR', 'time': 'DOUBLE'},
       auto_detect=false)
@@ -30,7 +30,7 @@ COPY (
       run_id,
       post_id,
       COUNT(*) AS total_reposts
-    FROM read_csv('{{.CascadesSSV}}', sep=' ', header=true,
+    FROM read_csv('{{.CascadesSSV}}', sep='\t', header=true,
       columns={'run_id': 'INTEGER', 'post_id': 'INTEGER', 'user_id': 'INTEGER',
                'parent_id': 'INTEGER', 'type': 'VARCHAR', 'time': 'DOUBLE'},
       auto_detect=false)
@@ -43,7 +43,7 @@ COPY (
       run_id,
       post_id,
       COUNT(*) AS total_likes
-    FROM read_csv('{{.LikesSSV}}', sep=' ', header=true,
+    FROM read_csv('{{.LikesSSV}}', sep='\t', header=true,
       columns={'run_id': 'INTEGER', 'post_id': 'INTEGER', 'user_id': 'INTEGER',
                'parent_id': 'INTEGER', 'type': 'VARCHAR', 'time': 'DOUBLE'},
       auto_detect=false)
