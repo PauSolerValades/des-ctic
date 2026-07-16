@@ -1,22 +1,16 @@
+# just the build.zig
 .zig-cache/
-zig-out/
-/release/
-/debug/
-/build/
-/build-*/
-/docgen_tmp/
-zig-pkg/
 
+# pipeline
+bin/
+steps/
+
+# files that i used to use
 data/
 traces/
 datasets/
 cascades/
 tmp/
-
-bskysim/data/
-
-construct-cascades/buckets
-construct-cascades/cascades.ssv
 
 # Python
 __pycache__/
@@ -24,8 +18,3 @@ __pycache__/
 # Output directories
 output/
 
-# Go
-dataset-creation/dataset-creation
-dataset-creation/data/
-
-bin/
