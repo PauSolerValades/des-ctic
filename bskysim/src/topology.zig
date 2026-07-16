@@ -99,9 +99,9 @@ pub const SimState = struct {
     user_seen_post: PagedBitSet(16),
     user_interact_post: PagedBitSet(16),
 
-    pub fn create(io: Io, arena: Allocator, gpa: Allocator, rng: Random, topology: *const Topology) !@This() {
+    pub fn create(io: Io, arena: Allocator, gpa: Allocator, rng: Random, topology: *const Topology, paramsdir: []const u8) !@This() {
         var users: std.MultiArrayList(User) = try .initCapacity(arena, topology.nodes);
-        try wireUsers(io, rng, topology, &users);
+        try wireUsers(io, rng, topology, &users, paramsdir);
 
         var timelines: []UserTimeline = try gpa.alloc(UserTimeline, users.len);
 
@@ -123,19 +123,29 @@ pub const SimState = struct {
     }
 
     /// every user in Size_monotonic.bin is in id order, that's perfect for us.
-    fn wireUsers(io: Io, rng: Random, topology: *const Topology, users: *MultiArrayList(User)) !void {
+    fn wireUsers(io: Io, rng: Random, topology: *const Topology, users: *MultiArrayList(User), paramsdir: []const u8) !void {
         const sample_size = 10000;
+
+        var session_duration_path_buf: [std.fs.max_path_bytes]u8 = undefined;
+        const session_duration_path = try std.fmt.bufPrint(&session_duration_path_buf, "{s}/session_duration_params.txt", .{paramsdir});
+
+        var inter_session_path_buf: [std.fs.max_path_bytes]u8 = undefined;
+        const inter_session_path = try std.fmt.bufPrint(&inter_session_path_buf, "{s}/inter_session_params.txt", .{paramsdir});
+
+        var inter_creation_path_buf: [std.fs.max_path_bytes]u8 = undefined;
+        const inter_creation_path = try std.fmt.bufPrint(&inter_creation_path_buf, "{s}/inter_creation_params.txt", .{paramsdir});
+
         var session_length_scale: [sample_size]f32 = undefined;
         var session_length_shape: [sample_size]f32 = undefined;
-        try fillPareto(io, "params/session_duration_params.txt", &session_length_shape, &session_length_scale);
+        try fillPareto(io, session_duration_path, &session_length_shape, &session_length_scale);
 
         var session_gap_scale: [sample_size]f32 = undefined;
         var session_gap_shape: [sample_size]f32 = undefined;
-        try fillPareto(io, "params/inter_session_params.txt", &session_gap_shape, &session_gap_scale);
+        try fillPareto(io, inter_session_path, &session_gap_shape, &session_gap_scale);
 
         var creation_scale: [sample_size]f32 = undefined;
         var creation_shape: [sample_size]f32 = undefined;
-        try fillPareto(io, "params/inter_creation_params.txt", &creation_shape, &creation_scale);
+        try fillPareto(io, inter_creation_path, &creation_shape, &creation_scale);
 
         // iterate over the user_ids. As they are monotonically increasing its fine
         for (0..topology.nodes) |id| {
