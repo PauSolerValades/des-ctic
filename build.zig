@@ -13,15 +13,18 @@ const SimulationConfig = struct {
 };
 
 const CascadesConfig = struct {
-    tmp_dir: ?[]const u8,
-    output_dir: ?[]const u8,
-    execution_dir: []const u8,
+    buckets: ?u32,
+    bucket_file: ?[]const u8,
+    output_file: ?[]const u8,
+    traces_dir: []const u8,
 };
 
 const JobConfig = struct {
     simulation: ?*SimulationConfig,
     cascade: ?*CascadesConfig,
 };
+
+const Recompile = enum { simulation, cascades, datasets, pipeline, all };
 
 pub fn build(b: *Build) void {
     var threaded: Io.Threaded = .init(b.allocator, .{});
@@ -34,7 +37,7 @@ pub fn build(b: *Build) void {
 
     const config_path = b.option([]const u8, "config", "Path to the configuration for this Job") orelse
         @panic("A configuration file must be provided");
-    // const rebuild = b.option(bool, "rebuild", "Should we rebuild the simulation?");
+    const recompile = b.option(Recompile, "compile", "Which parts of the pipeline to rebuild and move to the bin folder");
 
     const config_contents = Io.Dir.cwd().readFileAlloc(io, config_path, b.allocator, .unlimited) catch |err| {
         switch (err) {
@@ -67,11 +70,43 @@ pub fn build(b: *Build) void {
     };
     const run_sim = b.addSystemCommand(arg_list.items);
 
-    // if (rebuild) {
-    //     const rebuild_sim = b.addSystemCommand(&.{ "zig", "build", "-Doptimize=ReleaseFast", });
-    // }
-    const all_step = b.step("all", "Run the simulation");
+    var cascade_list: std.ArrayList([]const u8) = .empty;
+    defer cascade_list.deinit(b.allocator);
+
+    var cascade_step: ?*Build.Step = null;
+    if (config.cascade) |cascade_config| {
+        var b_buf: [16]u8 = undefined;
+        cascadeArguments(b.allocator, &cascade_list, cascade_config, &b_buf) catch |err| {
+            switch (err) {
+                error.NoSpaceLeft => @panic("buffer too small for -b argument"),
+                error.OutOfMemory => @panic("OOM building cascade arguments"),
+            }
+        };
+        const run_cascades = b.addSystemCommand(cascade_list.items);
+        run_cascades.step.dependOn(&run_sim.step);
+        cascade_step = &run_cascades.step;
+    }
+
+    if (recompile) |c| {
+        switch (c) {
+            .simulation => {
+                const compile_sim = b.addSystemCommand(&[_][]const u8{ "zig", "build", "-Doptimize=ReleaseFast", "-p", "../" });
+                compile_sim.setCwd(.{ .cwd_relative = "bskysim" });
+                run_sim.step.dependOn(&compile_sim.step);
+            },
+            .cascades => {
+                const compile_cas = b.addSystemCommand(&[_][]const u8{ "zig", "build", "-Doptimize=ReleaseFast", "-p", "../" });
+                compile_cas.setCwd(.{ .cwd_relative = "construct-cascades" });
+                // Always attach: cascade step if present, otherwise simulation
+                (cascade_step orelse &run_sim.step).dependOn(&compile_cas.step);
+            },
+            else => @panic("Not supported rn"),
+        }
+    }
+
+    const all_step = b.step("all", "Run simulation and cascade construction");
     all_step.dependOn(&run_sim.step);
+    if (cascade_step) |cs| all_step.dependOn(cs);
 }
 
 fn simulationArguments(
@@ -102,4 +137,27 @@ fn simulationArguments(
 
     try arg_list.append(gpa, config.data_file);
     try arg_list.append(gpa, config.config_file);
+}
+
+fn cascadeArguments(
+    gpa: std.mem.Allocator,
+    arg_list: *std.ArrayList([]const u8),
+    config: *const CascadesConfig,
+    b_buf: []u8,
+) !void {
+    try arg_list.append(gpa, "./bin/construct-cascade");
+
+    if (config.buckets) |b| {
+        try arg_list.append(gpa, try std.fmt.bufPrint(b_buf, "-b{}", .{b}));
+    }
+    if (config.bucket_file) |bf| {
+        try arg_list.append(gpa, "-p");
+        try arg_list.append(gpa, bf);
+    }
+    if (config.output_file) |out| {
+        try arg_list.append(gpa, "-o");
+        try arg_list.append(gpa, out);
+    }
+
+    try arg_list.append(gpa, config.traces_dir);
 }

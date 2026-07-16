@@ -2,7 +2,7 @@ const std = @import("std");
 const Io = std.Io;
 const traces = @import("traces");
 
-pub const line_fmt = "{d} {d} {d} {d} {s} {d}\n";
+pub const line_fmt = "{d}\t{d}\t{d}\t{d}\t{s}\t{d}\n";
 
 fn nextTrace(comptime T: type, reader: *Io.Reader) !?T {
     const bytes = reader.take(@sizeOf(T)) catch |err| {

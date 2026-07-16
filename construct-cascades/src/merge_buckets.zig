@@ -13,7 +13,7 @@ const Event = struct {
 
 const KeyVal = struct { key: CascadeKey, events: std.ArrayListUnmanaged(Event) };
 
-pub fn mergeBuckets(io: Io, gpa: Allocator, num_buckets: usize, buckets_path: []const u8, output_path: []const u8, stderr: *Io.Writer) (error{ WriteFailed, OutOfMemory } || Io.Dir.OpenError || Io.File.OpenError)!void {
+pub fn mergeBuckets(io: Io, gpa: Allocator, num_buckets: usize, buckets_path: []const u8, output_path: []const u8, stderr: *Io.Writer) (error{ WriteFailed, OutOfMemory } || Io.Dir.OpenError || Io.File.OpenError || Io.Dir.CreateDirPathError)!void {
     const buckets_dir = Io.Dir.cwd().openDir(io, buckets_path, .{}) catch |err| {
         try stderr.print("Error opening buckets dir '{s}': {}\n", .{ buckets_path, err });
         try stderr.flush();
@@ -21,11 +21,15 @@ pub fn mergeBuckets(io: Io, gpa: Allocator, num_buckets: usize, buckets_path: []
     };
     defer buckets_dir.close(io);
 
-    // Single streaming writer for cascades.ssv — OS controls the offset.
+    // Single streaming writer for cascades.tsv — OS controls the offset.
     // This means eventual multithreading is straightforward: each worker
     // gets a range of buckets and a pre-computed write offset, then writes
     // directly without coordination.
     //
+    if (std.fs.path.dirname(output_path)) |dir| {
+        try Io.Dir.cwd().createDirPath(io, dir);
+    }
+
     const cascades_file = try Io.Dir.cwd().createFile(io, output_path, .{ .truncate = true });
     defer cascades_file.close(io);
 
@@ -36,8 +40,8 @@ pub fn mergeBuckets(io: Io, gpa: Allocator, num_buckets: usize, buckets_path: []
 
     var nbuf: [64]u8 = undefined;
     const len = output_path.len;
-    // output path will always have an .ssv at the end.
-    const likes_output = try std.fmt.bufPrint(&nbuf, "{s}_likes.ssv", .{output_path[0..(len - 4)]});
+    // output path will always have an .tsv at the end.
+    const likes_output = try std.fmt.bufPrint(&nbuf, "{s}_likes.tsv", .{output_path[0..(len - 4)]});
     const likes_file = try Io.Dir.cwd().createFile(io, likes_output, .{ .truncate = true });
     defer likes_file.close(io);
 
@@ -50,7 +54,7 @@ pub fn mergeBuckets(io: Io, gpa: Allocator, num_buckets: usize, buckets_path: []
     var bucket_idx: usize = 0;
     while (bucket_idx < num_buckets) : (bucket_idx += 1) {
         var name_buf: [64]u8 = undefined;
-        const bucket_path = try std.fmt.bufPrint(&name_buf, "{s}/{d}_bucket.ssv", .{ buckets_path, bucket_idx });
+        const bucket_path = try std.fmt.bufPrint(&name_buf, "{s}/{d}_bucket.tsv", .{ buckets_path, bucket_idx });
 
         const file = buckets_dir.openFile(io, bucket_path, .{}) catch |err| {
             try stderr.print("warning - could not open bucket '{s}', skipping it. The output WILL BE INCOMPLETE. Error: {}\n", .{ bucket_path, err });
@@ -192,14 +196,14 @@ const ParsedLine = struct {
 const Type = enum { like, not_like };
 
 fn parseLine(line: []const u8) !ParsedLine {
-    const len_header = comptime std.mem.count(u8, @import("main.zig").header, " ") + 1;
+    const len_header = comptime std.mem.count(u8, @import("main.zig").header, "\t") + 1;
     var parts: [len_header][]const u8 = undefined;
 
     var count: usize = 0;
     var start: usize = 0;
 
     for (line, 0..) |c, i| {
-        if (c == ' ') {
+        if (c == '\t') { // tab
             if (count < len_header) {
                 parts[count] = line[start..i];
                 count += 1;

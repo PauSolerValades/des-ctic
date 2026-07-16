@@ -10,7 +10,7 @@ const Flag = argz.Flag;
 
 const ParseErrors = argz.ParseErrors;
 
-const to_buckets = @import("bin_to_ssv.zig");
+const to_buckets = @import("bin_to_tsv.zig");
 
 const def = .{
     .name = "specific",
@@ -20,13 +20,31 @@ const def = .{
     },
     .options = .{
         Opt(usize, "buckets", "b", 256, "How many bucket the program hashed the info."),
-        Opt([]const u8, "bucketpath", "p", "/tmp/cascade-building/", "Where the temporal buckets should be processed."),
-        Opt([]const u8, "output", "o", ".", "Path to store the cascade.ssv"),
+        Opt([]const u8, "bucketdir", "p", "/tmp/cascade-building/", "Where the temporal buckets should be processed."),
+        Opt([]const u8, "outputfile", "o", "cascade.tsv", "Path to store the cascade.tsv"),
     },
     .flags = .{},
 };
 
-pub const header = "run_id post_id user_id parent_id type time";
+pub const header = "run_id\tpost_id\tuser_id\tparent_id\ttype\ttime";
+
+pub fn parseAndValidateCmdArgs(iter: *std.process.Args.Iterator, stdout: *Io.Writer, stderr: *Io.Writer) error{WriteFailed}!argz.Reify(def) {
+    const args = argz.parseArgsPosix(def, iter, stdout, stderr) catch |err| {
+        switch (err) {
+            ParseErrors.HelpShown => try stdout.flush(),
+            else => try stderr.flush(),
+        }
+        std.process.exit(0);
+    };
+
+    if (!std.mem.eql(u8, std.fs.path.extension(args.outputfile), ".tsv")) {
+        try stderr.writeAll("The output file must be a path to an .tsv file");
+        try stderr.flush();
+        std.process.exit(1);
+    }
+
+    return args;
+}
 
 pub fn main(init: std.process.Init) !void {
     var buffer: [1024]u8 = undefined;
@@ -41,21 +59,7 @@ pub fn main(init: std.process.Init) !void {
     const gpa = init.gpa;
 
     var iter = init.minimal.args.iterate();
-    const args = argz.parseArgsPosix(def, &iter, stdout, stderr) catch |err| {
-        switch (err) {
-            ParseErrors.HelpShown => try stdout.flush(),
-            else => try stderr.flush(),
-        }
-        std.process.exit(0);
-    };
-
-    const len = args.output.len;
-    if (!std.mem.eql(u8, args.output[(len - 4)..len], ".ssv")) {
-        try stderr.writeAll("The output file must be a path to an .ssv file");
-        try stderr.flush();
-        std.process.exit(1);
-    }
-
+    const args = try parseAndValidateCmdArgs(&iter, stdout, stderr);
     try stdout.print("Creating cascades of '{s}' with {d} buckets\n", .{ args.traces, args.buckets });
     try stdout.flush();
 
@@ -80,7 +84,7 @@ pub fn main(init: std.process.Init) !void {
     const bucket_ifaces = try gpa.alloc(*Io.Writer, num_buckets);
     defer gpa.free(bucket_ifaces);
 
-    const bucketsDir = createOrClearBucketsDir(io, args.bucketpath) catch |err| {
+    const bucketsDir = createOrClearBucketsDir(io, args.bucketdir) catch |err| {
         try stderr.print("Oof cannot init buckets dir: {}\n", .{err});
         try stderr.flush();
         std.process.exit(1);
@@ -108,13 +112,13 @@ pub fn main(init: std.process.Init) !void {
     try stdout.flush();
 
     const mergeBuckets = @import("merge_buckets.zig").mergeBuckets;
-    mergeBuckets(io, gpa, num_buckets, args.bucketpath, args.output, stderr) catch {
-        try stderr.writeAll("Probelm opening the buckets directory :( \n");
+    mergeBuckets(io, gpa, num_buckets, args.bucketdir, args.outputfile, stderr) catch |err| {
+        try stderr.print("Probelm opening the buckets directory :(. Error: {}\n", .{err});
         try stderr.flush();
         std.process.exit(1);
     };
 
-    try stdout.print("Buckets Merged in {s}", .{args.output});
+    try stdout.print("Buckets Merged in {s}", .{args.outputfile});
     try stdout.flush();
 }
 
@@ -125,7 +129,7 @@ const BucketWriter = struct {
 
     fn init(self: *@This(), io_: Io, dir: Io.Dir, index: usize) !void {
         var name_buf: [32]u8 = undefined;
-        const path = try std.fmt.bufPrint(&name_buf, "{d}_bucket.ssv", .{index});
+        const path = try std.fmt.bufPrint(&name_buf, "{d}_bucket.tsv", .{index});
         self.file = try dir.createFile(io_, path, .{ .truncate = true });
         self.writer = self.file.writer(io_, &self.buffer);
     }

@@ -7,5 +7,10 @@
     "data_file": "bskysim/data/10K_monotonous.bin",
     "config_file": "bskysim/simconfs/final.json"
   },
-  "cascade": null
+  "cascade": {
+    "buckets": null,
+    "bucket_file": null,
+    "output_file": "steps/cascades/10K_run.tsv",
+    "traces_dir": "steps/traces/10K_run"
+  }
 }
