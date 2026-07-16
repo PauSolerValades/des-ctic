@@ -23,6 +23,7 @@ pub const DataType = entities.Action;
 const parse = @import("dist-json-parse/parse.zig");
 const ParseError = parse.ParseError;
 const JsonScannerError = parse.JsonScannerError;
+const ReadFileError = std.Io.Dir.ReadFileError;
 const readKeyNumber = parse.readKeyNumber;
 const readKeyBool = parse.readKeyBool;
 
@@ -73,7 +74,10 @@ pub const SimConfig = struct {
     trace_to_file: bool,
 
     /// Opens the json file and loads the distributions in memory
-    pub fn create(gpa: Allocator, content: []u8, stderr: *Io.Writer) (ParseError || JsonScannerError || error{ InvalidCharacter, WriteFailed })!SimConfig {
+    pub fn create(io: Io, gpa: Allocator, config_file: []const u8, stderr: *Io.Writer) (ParseError || JsonScannerError || ReadFileError || error{ InvalidCharacter, WriteFailed })!SimConfig {
+        var config_buff: [4096]u8 = undefined;
+        const content = try Io.Dir.cwd().readFile(io, config_file, &config_buff);
+
         var scanner = Scanner.initCompleteInput(gpa, content);
         defer scanner.deinit();
 

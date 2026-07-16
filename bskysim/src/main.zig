@@ -26,13 +26,13 @@ const def = .{
     .name = "specific",
     .description = "Bskysim with the configuration struct known at compile time",
     .required = .{
-        Arg([]const u8, "data", "Data file containing the network definition"),
-        Arg([]const u8, "config", "Input parameters"),
+        Arg([]const u8, "datafile", "Data file containing the network definition"),
+        Arg([]const u8, "configfile", "Input parameters"),
     },
     .options = .{
-        Opt([]const u8, "output", "o", "./traces", "Dataset name for trace folder"),
-        Opt(usize, "runs", "n", 1, "Runs to execute the simulation"),
-        Opt(usize, "workers", "w", 1, "Units of parallelism"),
+        Opt(?[]const u8, "outputdir", "o", null, "Dataset name for trace folder"),
+        Opt(u32, "runs", "n", 1, "Runs to execute the simulation"),
+        Opt(u32, "workers", "w", 1, "Units of parallelism"),
     },
     .flags = .{
         Flag("clean", "c", "Delete the .bin output"),
@@ -40,21 +40,8 @@ const def = .{
     },
 };
 
-pub fn main(init: std.process.Init) !void {
-    var buffer: [1024]u8 = undefined;
-    var stdout_writer = Io.File.stdout().writer(init.io, &buffer);
-    const stdout = &stdout_writer.interface;
-
-    var bufferr: [1024]u8 = undefined;
-    var stderr_writer = Io.File.stderr().writer(init.io, &bufferr);
-    const stderr = &stderr_writer.interface;
-
-    const arena = init.arena.allocator();
-    const gpa = init.gpa;
-    const cwd = Io.Dir.cwd();
-
-    var iter = init.minimal.args.iterate();
-    const args = argz.parseArgsPosix(def, &iter, stdout, stderr) catch |err| {
+pub fn parseAndValidateCmdArgs(iter: *std.process.Args.Iterator, stdout: *Io.Writer, stderr: *Io.Writer) error{WriteFailed}!argz.Reify(def) {
+    const args = argz.parseArgsPosix(def, iter, stdout, stderr) catch |err| {
         switch (err) {
             ParseErrors.HelpShown => try stdout.flush(),
             else => try stderr.flush(),
@@ -68,46 +55,98 @@ pub fn main(init: std.process.Init) !void {
         std.process.exit(0);
     }
 
-    var arena_json: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
-    const data_alloc = arena_json.allocator();
-
-    const len = args.config.len;
-    if (std.mem.eql(u8, args.config[len - 5 .. len - 1], ".json")) {
-        try stderr.print("The provided config file ({s}) does not have a 'json' extension\n", .{args.config});
+    if (std.mem.eql(u8, std.fs.path.extension(args.configfile), ".json")) {
+        try stderr.print("The provided config file ({s}) does not have a 'json' extension\n", .{args.configfile});
+        try stderr.flush();
         std.process.exit(1);
     }
 
-    //TODO: use a buffer as we know how long this is going to be
-    const content = Io.Dir.cwd().readFileAlloc(init.io, args.config, gpa, .unlimited) catch |err| {
-        switch (err) {
-            error.FileNotFound => try stderr.print("Config file {s} is not found.\n", .{args.config}),
-            error.IsDir => try stderr.print("{s} is a directory.\n", .{args.config}),
-            else => try stderr.print("Unexpected error: {}", .{err}),
-        }
-        std.process.exit(0);
-    };
-    defer gpa.free(content);
+    if (!std.mem.eql(u8, std.fs.path.extension(args.datafile), ".bin")) {
+        try stderr.writeAll("warning - the provided data file does not have a .bin extension. Are you sure it's a valid topology?");
+        try stderr.flush();
+    }
 
-    const config: SimConfig = SimConfig.create(gpa, content, stderr) catch |err| {
+    return args;
+}
+
+// a generic copy file function lol
+fn copyFile(io: Io, src_path: []const u8, dst_path: []const u8) !void {
+    const src = try Io.Dir.cwd().openFile(io, src_path, .{});
+    defer src.close(io);
+    const dst = try Io.Dir.cwd().createFile(io, dst_path, .{ .truncate = true });
+    defer dst.close(io);
+
+    var rbuf: [4096]u8 = undefined;
+    var wbuf: [4096]u8 = undefined;
+    var reader = src.reader(io, &rbuf);
+    var writer = dst.writer(io, &wbuf);
+
+    while (true) {
+        const chunk = reader.interface.take(rbuf.len) catch |err| switch (err) {
+            error.EndOfStream => break,
+            error.ReadFailed => return err,
+        };
+        try writer.interface.writeAll(chunk);
+    }
+    try writer.interface.flush();
+}
+
+fn createUsedConfig(io: Io, dir: []const u8, src_config_path: []const u8) !void {
+    var buf: [std.fs.max_path_bytes]u8 = undefined;
+    const dst = try std.fmt.bufPrint(&buf, "{s}/used_config.json", .{dir});
+    try copyFile(io, src_config_path, dst);
+}
+
+fn createExecutionTimes(io: Io, dir: []const u8) !Io.File {
+    var path_buf: [std.fs.max_path_bytes]u8 = undefined;
+    const path = try std.fmt.bufPrint(&path_buf, "{s}/execution_times.ssv", .{dir});
+    const file = try Io.Dir.cwd().createFile(io, path, .{ .truncate = true });
+    var wbuf: [64]u8 = undefined;
+    var writer = file.writerStreaming(io, &wbuf);
+    try writer.interface.writeAll("batch run time_ms\n");
+    try writer.interface.flush();
+    return file;
+}
+
+pub fn main(init: std.process.Init) !void {
+    var buffer: [1024]u8 = undefined;
+    var stdout_writer = Io.File.stdout().writer(init.io, &buffer);
+    const stdout = &stdout_writer.interface;
+
+    var bufferr: [1024]u8 = undefined;
+    var stderr_writer = Io.File.stderr().writer(init.io, &bufferr);
+    const stderr = &stderr_writer.interface;
+
+    const arena = init.arena.allocator();
+    const gpa = init.gpa;
+
+    var iter = init.minimal.args.iterate();
+    const args = parseAndValidateCmdArgs(&iter, stdout, stderr) catch std.process.exit(1);
+
+    var arena_json: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    const data_alloc = arena_json.allocator();
+
+    const config: SimConfig = SimConfig.create(init.io, gpa, args.configfile, stderr) catch |err| {
         switch (err) {
             error.OutOfMemory => try stderr.writeAll("Out of memory while parsing config.\n"),
-            error.WriteFailed => {}, // stderr already dead, nothing to do
+            error.WriteFailed => {}, // stderr already dead, nothing to do, just crash
             error.InvalidCharacter => try stderr.writeAll("Invalid number in config file.\n"),
             // JsonScannerError: JSON structure is malformed
             error.UnexpectedToken, error.SyntaxError, error.UnexpectedEndOfInput, error.BufferUnderrun => try stderr.writeAll("Invalid JSON config file.\n"),
             // ParseError: diagnostic already printed by the parser
             error.UnknownDistribution, error.UnknownParameter, error.MissingField, error.InvalidInterval, error.InvalidField => {},
+            error.FileNotFound => try stderr.print("Config file {s} is not found.\n", .{args.configfile}),
+            error.IsDir => try stderr.print("{s} is a directory.\n", .{args.configfile}),
+            else => try stderr.print("Unexpected error: {}", .{err}),
         }
         try stderr.flush();
-        std.process.exit(1);
+        std.process.exit(0);
     };
     defer config.delete(gpa);
-    try stderr.flush(); // if a warning happens
-
-    //TODO: dump current config into the output folder with stringify
+    try stderr.flush(); // a warning in the distribution parsing can actually happen
 
     const startTimeLoadData = Io.Timestamp.now(init.io, .real);
-    const sampled_topology = try loader.BinaryGraph.create(init.io, data_alloc, args.data);
+    const sampled_topology = try loader.BinaryGraph.create(init.io, data_alloc, args.datafile);
     const elapsedTimeLoadData = startTimeLoadData.untilNow(init.io, .real);
 
     try stdout.print("Time Elapsed Loading Data: {d} ms\n", .{elapsedTimeLoadData.toMilliseconds()});
@@ -120,10 +159,8 @@ pub fn main(init: std.process.Init) !void {
     };
 
     const startTimeWireData = Io.Timestamp.now(init.io, .real);
-
     var topology: Topology = try .create(arena, sampled_topology);
     defer topology.delete(arena);
-
     const elapsedTimeWireData = startTimeWireData.untilNow(init.io, .real);
 
     var samp_top_var = sampled_topology;
@@ -133,59 +170,62 @@ pub fn main(init: std.process.Init) !void {
     try stdout.print("Time Elapsed wiring topology: {d} ms\n", .{elapsedTimeWireData.toMilliseconds()});
     try stdout.flush();
 
-    // TODO: Switch this to IO
-    const data_dir = std.fs.path.dirname(args.data) orelse ".";
-    const dataset_name = if (args.output.len > 0) args.output else std.fs.path.basename(data_dir);
-
-    var traces_base_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const traces_base = try std.fmt.bufPrint(&traces_base_buf, "{s}", .{dataset_name});
-    cwd.createDir(init.io, "traces", .default_dir) catch |err| switch (err) {
-        error.PathAlreadyExists => {}, // dw if the path already exists
-        else => return err,
+    var output_buff: [std.fs.max_path_bytes]u8 = undefined;
+    const output_job_dir = if (args.outputdir) |od| od else blk: {
+        break :blk try std.fmt.bufPrint(&output_buff, "./traces/{d}", .{Io.Timestamp.now(init.io, .real).toMilliseconds()});
     };
-    cwd.createDirPath(init.io, traces_base) catch |err| switch (err) {
+    Io.Dir.cwd().createDirPath(
+        init.io,
+        output_job_dir,
+    ) catch |err| switch (err) {
         error.PathAlreadyExists => {},
         else => return err,
     };
 
-    const run_dir = traces_base;
-
-    var config_buff: [std.fs.max_path_bytes]u8 = undefined;
-    const used_config_path = try std.fmt.bufPrint(&config_buff, "{s}/used_config.json", .{run_dir});
-    const file_config = try Io.Dir.cwd().createFile(init.io, used_config_path, .{ .truncate = true });
-    defer file_config.close(init.io);
-    var config_buf2: [4096]u8 = undefined;
-    var config_writer = file_config.writerStreaming(init.io, &config_buf2);
-    const config_w = &config_writer.interface;
-    try config_w.writeAll(content);
-    try config_w.flush();
-
-    var times_path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const times_path = try std.fmt.bufPrint(&times_path_buf, "{s}/execution_times.ssv", .{run_dir});
-    const times_file = try Io.Dir.cwd().createFile(init.io, times_path, .{ .truncate = true });
+    try createUsedConfig(init.io, output_job_dir, args.configfile);
+    const times_file = try createExecutionTimes(init.io, output_job_dir);
     defer times_file.close(init.io);
 
-    var times_buf: [64]u8 = undefined;
-    var times_writer = times_file.writerStreaming(init.io, &times_buf);
-    const times_w = &times_writer.interface;
-    try times_w.writeAll("batch run time_ms\n");
-    try times_w.flush();
+    try launchWorkers(
+        gpa,
+        times_file,
+        &topology,
+        &config,
+        seed,
+        output_job_dir,
+        args.workers,
+        args.runs,
+        args.skipjsonl,
+        stdout,
+    );
+}
+
+fn launchWorkers(
+    gpa: std.mem.Allocator,
+    times_file: Io.File,
+    topology: *const Topology,
+    config: *const SimConfig,
+    seed: u64,
+    run_dir: []const u8,
+    workers: u32,
+    total_runs: u32,
+    skipjsonl: bool,
+    stdout: *Io.Writer,
+) !void {
+    var mutex_times: Io.Mutex = .init;
 
     var threaded: Io.Threaded = .init(gpa, .{});
     defer threaded.deinit();
     const tio = threaded.io();
 
-    var mutex_times: Io.Mutex = .init;
-
-    var futures = try gpa.alloc(@TypeOf(try tio.concurrent(simulationBatch, undefined)), args.workers);
+    var futures = try gpa.alloc(@TypeOf(try tio.concurrent(simulationBatch, undefined)), workers);
     defer gpa.free(futures);
 
-    const runs_per_worker = args.runs / args.workers;
-    const total_runs = args.runs;
+    const runs_per_worker = total_runs / workers;
 
-    for (0..args.workers) |i| {
+    for (0..workers) |i| {
         const start_idx = i * runs_per_worker;
-        const runs = if (i == args.workers - 1)
+        const runs = if (i == workers - 1)
             total_runs - start_idx
         else
             runs_per_worker;
@@ -193,21 +233,21 @@ pub fn main(init: std.process.Init) !void {
         const batch_args = .{
             &mutex_times,
             times_file,
-            &topology,
-            &config,
+            topology,
+            config,
             seed,
             runs,
             start_idx,
             run_dir,
             i,
-            args.skipjsonl,
+            skipjsonl,
         };
         futures[i] = try tio.concurrent(simulationBatch, batch_args);
         try stdout.print("Spawned batch {d} with {d} runs\n", .{ i, runs });
     }
     try stdout.flush();
 
-    for (0..args.workers) |i| {
+    for (0..workers) |i| {
         try futures[i].await(tio);
     }
 }
