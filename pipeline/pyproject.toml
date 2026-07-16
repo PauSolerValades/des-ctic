@@ -1,7 +1,0 @@
-[project]
-name = "pipeline"
-version = "0.1.0"
-description = "Run bskysim → construct-cascades → dataset-creation"
-readme = "README.md"
-requires-python = ">=3.12"
-dependencies = []

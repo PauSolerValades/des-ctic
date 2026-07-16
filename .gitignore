@@ -27,3 +27,5 @@ output/
 # Go
 dataset-creation/dataset-creation
 dataset-creation/data/
+
+bin/
