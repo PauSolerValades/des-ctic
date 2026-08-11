@@ -1,0 +1,162 @@
+
+{
+  "seed": 42,
+  "horizon": 4000,
+  "duration": 3000,
+  "warmup_time": 30,
+  "user_policy": {
+    "weights": [0.80, 0.188, 0.012 ],
+    "data": [ "ignore", "like", "repost" ]
+  },
+  "user_inter_action": {
+    "exponential": {
+      "mean": 3 
+    }
+  },
+  "warmup_post_inter_creation": {
+    "uniform": {
+      "min": 0,
+      "max": 1000,
+      "interval": "oc"
+    }
+  },
+  "propagation_delay": {
+    "constant": {
+      "value": 1
+    }
+  },
+  "interaction_delay": { 
+    "constant": {
+      "value": 1
+    }
+  },
+  "creation_delay": {
+    "constant": {
+      "value": 1
+    }
+  },
+  "offline_startup_ratio": 0.5,
+  "trace_to_file": true,
+  "users": [
+    {
+      "session_duration": "exponential",
+      "inter_session_time": "weibull",
+      "ecdf_parameters_path": "ecdfs/parameters/params__expon__weibull_min.tsv",
+      "ecdf_post_creation_path": "ecdfs/inter_creation_time/gaps/within_ecdf__expon__weibull_min.tsv",
+      "ecdf_offset_creation_path": "ecdfs/inter_creation_time/offsets/offset_ecdf__expon__weibull_min.tsv",
+      "probability": 0.162
+    },
+    {
+      "session_duration": "exponential",
+      "inter_session_time": "lognormal",
+      "ecdf_parameters_path": "ecdfs/parameters/params__expon__lognorm.tsv",
+      "ecdf_post_creation_path": "ecdfs/inter_creation_time/gaps/within_ecdf__expon__lognorm.tsv",
+      "ecdf_offset_creation_path": "ecdfs/inter_creation_time/offsets/offset_ecdf__expon__lognorm.tsv",
+      "probability": 0.081
+    },
+    {
+      "session_duration": "exponential",
+      "inter_session_time": "pareto",
+      "ecdf_parameters_path": "ecdfs/parameters/params__expon__pareto.tsv",
+      "ecdf_post_creation_path": "ecdfs/inter_creation_time/gaps/within_ecdf__expon__power_tail.tsv",
+      "ecdf_offset_creation_path": "ecdfs/inter_creation_time/offsets/offset_ecdf__expon__power_tail.tsv",
+      "probability": 0.036
+    },
+    {
+      "session_duration": "weibull",
+      "inter_session_time": "weibull",
+      "ecdf_parameters_path": "ecdfs/parameters/params__weibull_min__weibull_min.tsv",
+      "ecdf_post_creation_path": "ecdfs/inter_creation_time/gaps/within_ecdf__weibull_min__weibull_min.tsv",
+      "ecdf_offset_creation_path": "ecdfs/inter_creation_time/offsets/offset_ecdf__weibull_min__weibull_min.tsv",
+      "probability": 0.100
+    },
+    {
+      "session_duration": "weibull",
+      "inter_session_time": "lognormal",
+      "ecdf_parameters_path": "ecdfs/parameters/params__weibull_min__lognorm.tsv",
+      "ecdf_post_creation_path": "ecdfs/inter_creation_time/gaps/within_ecdf__weibull_min__lognorm.tsv",
+      "ecdf_offset_creation_path": "ecdfs/inter_creation_time/offsets/offset_ecdf__weibull_min__lognorm.tsv",
+      "probability": 0.087
+    },
+    {
+      "session_duration": "weibull",
+      "inter_session_time": "pareto",
+      "ecdf_parameters_path": "ecdfs/parameters/params__weibull_min__pareto.tsv",
+      "ecdf_post_creation_path": "ecdfs/inter_creation_time/gaps/within_ecdf__weibull_min__power_tail.tsv",
+      "ecdf_offset_creation_path": "ecdfs/inter_creation_time/offsets/offset_ecdf__weibull_min__power_tail.tsv",
+      "probability": 0.056
+    },
+    {
+      "session_duration": "gamma",
+      "inter_session_time": "weibull",
+      "ecdf_parameters_path": "ecdfs/parameters/params__gamma__weibull_min.tsv",
+      "ecdf_post_creation_path": "ecdfs/inter_creation_time/gaps/within_ecdf__gamma__weibull_min.tsv",
+      "ecdf_offset_creation_path": "ecdfs/inter_creation_time/offsets/offset_ecdf__gamma__weibull_min.tsv",
+      "probability": 0.083
+    },
+    {
+      "session_duration": "gamma",
+      "inter_session_time": "lognormal",
+      "ecdf_parameters_path": "ecdfs/parameters/params__gamma__lognorm.tsv",
+      "ecdf_post_creation_path": "ecdfs/inter_creation_time/gaps/within_ecdf__gamma__lognorm.tsv",
+      "ecdf_offset_creation_path": "ecdfs/inter_creation_time/offsets/offset_ecdf__gamma__lognorm.tsv",
+      "probability": 0.061
+    },
+    {
+      "session_duration": "gamma",
+      "inter_session_time": "pareto",
+      "ecdf_parameters_path": "ecdfs/parameters/params__gamma__pareto.tsv",
+      "ecdf_post_creation_path": "ecdfs/inter_creation_time/gaps/within_ecdf__gamma__power_tail.tsv",
+      "ecdf_offset_creation_path": "ecdfs/inter_creation_time/offsets/offset_ecdf__gamma__power_tail.tsv",
+      "probability": 0.037
+    },
+    {
+      "session_duration": "lognormal",
+      "inter_session_time": "weibull",
+      "ecdf_parameters_path": "ecdfs/parameters/params__lognorm__weibull_min.tsv",
+      "ecdf_post_creation_path": "ecdfs/inter_creation_time/gaps/within_ecdf__lognorm__weibull_min.tsv",
+      "ecdf_offset_creation_path": "ecdfs/inter_creation_time/offsets/offset_ecdf__lognorm__weibull_min.tsv",
+      "probability": 0.071
+    },
+    {
+      "session_duration": "lognormal",
+      "inter_session_time": "lognormal",
+      "ecdf_parameters_path": "ecdfs/parameters/params__lognorm__lognorm.tsv",
+      "ecdf_post_creation_path": "ecdfs/inter_creation_time/gaps/within_ecdf__lognorm__lognorm.tsv",
+      "ecdf_offset_creation_path": "ecdfs/inter_creation_time/offsets/offset_ecdf__lognorm__lognorm.tsv",
+      "probability": 0.044
+    },
+    {
+      "session_duration": "lognormal",
+      "inter_session_time": "pareto",
+      "ecdf_parameters_path": "ecdfs/parameters/params__lognorm__pareto.tsv",
+      "ecdf_post_creation_path": "ecdfs/inter_creation_time/gaps/within_ecdf__lognorm__power_tail.tsv",
+      "ecdf_offset_creation_path": "ecdfs/inter_creation_time/offsets/offset_ecdf__lognorm__power_tail.tsv",
+      "probability": 0.034
+    },
+    {
+      "session_duration": "pareto",
+      "inter_session_time": "weibull",
+      "ecdf_parameters_path": "ecdfs/parameters/params__pareto__weibull_min.tsv",
+      "ecdf_post_creation_path": "ecdfs/inter_creation_time/gaps/within_ecdf__power_tail__weibull_min.tsv",
+      "ecdf_offset_creation_path": "ecdfs/inter_creation_time/offsets/offset_ecdf__power_tail__weibull_min.tsv",
+      "probability": 0.075
+    },
+    {
+      "session_duration": "pareto",
+      "inter_session_time": "lognormal",
+      "ecdf_parameters_path": "ecdfs/parameters/params__pareto__lognorm.tsv",
+      "ecdf_post_creation_path": "ecdfs/inter_creation_time/gaps/within_ecdf__power_tail__lognorm.tsv",
+      "ecdf_offset_creation_path": "ecdfs/inter_creation_time/offsets/offset_ecdf__power_tail__lognorm.tsv",
+      "probability": 0.045
+    },
+    {
+      "session_duration": "pareto",
+      "inter_session_time": "pareto",
+      "ecdf_parameters_path": "ecdfs/parameters/params__pareto__pareto.tsv",
+      "ecdf_post_creation_path": "ecdfs/inter_creation_time/gaps/within_ecdf__power_tail__power_tail.tsv",
+      "ecdf_offset_creation_path": "ecdfs/inter_creation_time/offsets/offset_ecdf__power_tail__power_tail.tsv",
+      "probability": 0.028
+    }
+  ]
+}

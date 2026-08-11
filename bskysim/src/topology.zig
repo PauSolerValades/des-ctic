@@ -5,6 +5,9 @@ const Allocator = std.mem.Allocator;
 const MultiArrayList = std.MultiArrayList;
 const ArrayList = std.ArrayList;
 
+const build_options = @import("build_options");
+const pool = @import("pool.zig");
+
 const entities = @import("entities.zig");
 const BinaryGraph = @import("load-topology.zig").BinaryGraph;
 
@@ -15,6 +18,8 @@ const PagedBitSet = ds.PagedBitSet;
 
 const User = entities.User;
 const Post = entities.Post;
+
+const TimelinePool = pool.TimelinePool;
 
 fn fillPareto(io: std.Io, filename: []const u8, shape_buff: []f32, scale_buff: []f32) !void {
     var buf: [32 * 10000]u8 = undefined;
@@ -98,6 +103,7 @@ pub const SimState = struct {
     posts: SMAList(Post, 16),
     user_seen_post: PagedBitSet(16),
     user_interact_post: PagedBitSet(16),
+    timeline_pool: if (build_options.use_pool) TimelinePool else void = if (build_options.use_pool) undefined else {},
 
     pub fn create(io: Io, arena: Allocator, gpa: Allocator, rng: Random, topology: *const Topology, paramsdir: []const u8) !@This() {
         var users: std.MultiArrayList(User) = try .initCapacity(arena, topology.nodes);
@@ -105,21 +111,26 @@ pub const SimState = struct {
 
         var timelines: []UserTimeline = try gpa.alloc(UserTimeline, users.len);
 
-        for (0..timelines.len) |i| {
-            timelines[i] = try .create(gpa, 1024);
-        }
-
-        const posts: SMAList(Post, 16) = .empty;
-        const seen_matrix: PagedBitSet(16) = try .initPages(arena, users.len, 16);
-        const interacted_matrix: PagedBitSet(16) = try .initPages(arena, users.len, 16);
-
-        return SimState{
+        // ponytail: slot_capacity 1024 matches original .create(gpa, 1024).
+        // Increase if stress test shows gpa_fallbacks > 0.
+        var self = SimState{
             .users = users,
             .timelines = timelines,
-            .posts = posts,
-            .user_seen_post = seen_matrix,
-            .user_interact_post = interacted_matrix,
+            .posts = .empty,
+            .user_seen_post = undefined,
+            .user_interact_post = undefined,
+            .timeline_pool = if (build_options.use_pool) try TimelinePool.init(gpa, users.len, 1024) else {},
         };
+
+        const tl_alloc = if (build_options.use_pool) self.timeline_pool.allocator() else gpa;
+        for (0..timelines.len) |i| {
+            timelines[i] = try .create(tl_alloc, 1024);
+        }
+
+        self.user_seen_post = try .initPages(arena, users.len, 16);
+        self.user_interact_post = try .initPages(arena, users.len, 16);
+
+        return self;
     }
 
     /// every user in Size_monotonic.bin is in id order, that's perfect for us.
@@ -201,10 +212,13 @@ pub const SimState = struct {
     pub fn delete(self: *@This(), arena: Allocator, gpa: Allocator) void {
         self.users.deinit(arena);
 
+        const tl_alloc = if (build_options.use_pool) self.timeline_pool.allocator() else gpa;
         for (self.timelines) |timeline| {
-            timeline.delete(gpa);
+            timeline.delete(tl_alloc);
         }
         gpa.free(self.timelines);
+
+        if (build_options.use_pool) self.timeline_pool.deinit();
 
         self.user_seen_post.deinit(arena);
         self.user_interact_post.deinit(arena);
@@ -225,6 +239,13 @@ pub const SimState = struct {
         self.posts.clearRetainingCapacity();
         self.user_seen_post.clearRetainingCapacity();
         self.user_interact_post.clearRetainingCapacity();
+
+        if (build_options.use_pool) self.timeline_pool.reset();
+    }
+
+    pub fn poolFallbacks(self: *const @This()) usize {
+        if (build_options.use_pool) return self.timeline_pool.gpa_fallbacks;
+        return 0;
     }
 };
 

@@ -23,15 +23,14 @@ const Flag = argz.Flag;
 const ParseErrors = argz.ParseErrors;
 
 const def = .{
-    .name = "specific",
-    .description = "Bskysim with the configuration struct known at compile time",
+    .name = "ctic-adqb",
+    .description = "Continuous-Time Independent Cascade, Activity Driven Queue Based Simulation of a Bluesky-like network.",
     .required = .{
         Arg([]const u8, "datafile", "Data file containing the network definition"),
         Arg([]const u8, "configfile", "Input parameters"),
     },
     .options = .{
         Opt(?[]const u8, "outputdir", "o", null, "Dataset name for trace folder"),
-        Opt([]const u8, "paramsdir", "p", "./params", "Directory with parameter files"),
         Opt(u32, "runs", "n", 1, "Runs to execute the simulation"),
         Opt(u32, "workers", "w", 1, "Units of parallelism"),
     },
@@ -40,74 +39,6 @@ const def = .{
         Flag("skipjsonl", "s", "Don't convert to JSONL"),
     },
 };
-
-pub fn parseAndValidateCmdArgs(iter: *std.process.Args.Iterator, stdout: *Io.Writer, stderr: *Io.Writer) error{WriteFailed}!argz.Reify(def) {
-    const args = argz.parseArgsPosix(def, iter, stdout, stderr) catch |err| {
-        switch (err) {
-            ParseErrors.HelpShown => try stdout.flush(),
-            else => try stderr.flush(),
-        }
-        std.process.exit(0);
-    };
-
-    if (args.clean and args.skipjsonl) {
-        try stdout.writeAll("Flags -c/--clean and -s/--skipjsonl are mutually exclusive");
-        try stdout.flush();
-        std.process.exit(0);
-    }
-
-    if (std.mem.eql(u8, std.fs.path.extension(args.configfile), "json")) {
-        try stderr.print("The provided config file ({s}) does not have a 'json' extension\n", .{args.configfile});
-        try stderr.flush();
-        std.process.exit(1);
-    }
-
-    if (!std.mem.eql(u8, std.fs.path.extension(args.datafile), ".bin")) {
-        try stderr.writeAll("warning - the provided data file does not have a .bin extension. Are you sure it's a valid topology?");
-        try stderr.flush();
-    }
-
-    return args;
-}
-
-// a generic copy file function lol
-fn copyFile(io: Io, src_path: []const u8, dst_path: []const u8) !void {
-    const src = try Io.Dir.cwd().openFile(io, src_path, .{});
-    defer src.close(io);
-    const dst = try Io.Dir.cwd().createFile(io, dst_path, .{ .truncate = true });
-    defer dst.close(io);
-
-    var rbuf: [4096]u8 = undefined;
-    var wbuf: [4096]u8 = undefined;
-    var reader = src.reader(io, &rbuf);
-    var writer = dst.writer(io, &wbuf);
-
-    while (true) {
-        const chunk = reader.interface.take(rbuf.len) catch |err| switch (err) {
-            error.EndOfStream => break,
-            error.ReadFailed => return err,
-        };
-        try writer.interface.writeAll(chunk);
-    }
-    try writer.interface.flush();
-}
-
-fn createUsedConfig(io: Io, dir: []const u8, src_config_path: []const u8) !void {
-    var buf: [std.fs.max_path_bytes]u8 = undefined;
-    const dst = try std.fmt.bufPrint(&buf, "{s}/used_config.json", .{dir});
-    try copyFile(io, src_config_path, dst);
-}
-
-fn createExecutionTimes(io: Io, dir: []const u8) !Io.File {
-    var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const path = try std.fmt.bufPrint(&path_buf, "{s}/execution_times.ssv", .{dir});
-    const file = try Io.Dir.cwd().createFile(io, path, .{ .truncate = true });
-    var wbuf: [64]u8 = undefined;
-    var writer = file.writerStreaming(io, &wbuf);
-    try writer.interface.writeAll("batch run time_ms\n");
-    try writer.interface.flush();
-    return file;
-}
 
 pub fn main(init: std.process.Init) !void {
     var buffer: [1024]u8 = undefined;
@@ -136,15 +67,23 @@ pub fn main(init: std.process.Init) !void {
             error.UnexpectedToken, error.SyntaxError, error.UnexpectedEndOfInput, error.BufferUnderrun => try stderr.writeAll("Invalid JSON config file.\n"),
             // ParseError: diagnostic already printed by the parser
             error.UnknownDistribution, error.UnknownParameter, error.MissingField, error.InvalidInterval, error.InvalidField => {},
+            // std.json.ParseError(Scanner): typed parsing of the users array failed
+            error.Overflow, error.InvalidNumber, error.InvalidEnumTag, error.DuplicateField, error.UnknownField, error.LengthMismatch, error.ValueTooLong => try stderr.writeAll("Problem while parsing user configuration.\n"),
             error.FileNotFound => try stderr.print("Config file {s} is not found.\n", .{args.configfile}),
             error.IsDir => try stderr.print("{s} is a directory.\n", .{args.configfile}),
             else => try stderr.print("Unexpected error: {}", .{err}),
         }
         try stderr.flush();
-        std.process.exit(0);
+        std.process.exit(1);
     };
     defer config.delete(gpa);
     try stderr.flush(); // a warning in the distribution parsing can actually happen
+
+    if (config.isValid(init.io)) {
+        try stderr.print("Invalid configuration. Please check the config parameters\n", .{});
+        std.process.exit(1);
+    }
+    std.debug.print("we have {d} categories\n", .{config.users.len});
 
     const startTimeLoadData = Io.Timestamp.now(init.io, .real);
     const sampled_topology = try loader.BinaryGraph.create(init.io, data_alloc, args.datafile);
@@ -343,7 +282,11 @@ fn simulationBatch(
         try times_w.flush();
         mutex_times.unlock(io);
 
-        try stdout.print("[Batch {d} - {d}] - Execution time: {d} ms\n", .{ worker_id, run_idx, elapsedTime.toMilliseconds() });
+        try stdout.print("[Batch {d} - {d}] - Execution time: {d} ms", .{ worker_id, run_idx, elapsedTime.toMilliseconds() });
+        if (state.poolFallbacks() > 0) {
+            try stdout.print(" | pool-fallbacks: {d}", .{state.poolFallbacks()});
+        }
+        try stdout.print("\n", .{});
         try stdout.flush();
 
         state.reset();
@@ -467,4 +410,72 @@ fn runTracedSimulation(
     if (!skipjsonl) try traces.bytesToJsonl(io, traces.TraceSwap, swap_bin, swap_jsonl);
 
     return elapsed;
+}
+
+pub fn parseAndValidateCmdArgs(iter: *std.process.Args.Iterator, stdout: *Io.Writer, stderr: *Io.Writer) error{WriteFailed}!argz.Reify(def) {
+    const args = argz.parseArgsPosix(def, iter, stdout, stderr) catch |err| {
+        switch (err) {
+            ParseErrors.HelpShown => try stdout.flush(),
+            else => try stderr.flush(),
+        }
+        std.process.exit(0);
+    };
+
+    if (args.clean and args.skipjsonl) {
+        try stdout.writeAll("Flags -c/--clean and -s/--skipjsonl are mutually exclusive");
+        try stdout.flush();
+        std.process.exit(0);
+    }
+
+    if (std.mem.eql(u8, std.fs.path.extension(args.configfile), "json")) {
+        try stderr.print("The provided config file ({s}) does not have a 'json' extension\n", .{args.configfile});
+        try stderr.flush();
+        std.process.exit(1);
+    }
+
+    if (!std.mem.eql(u8, std.fs.path.extension(args.datafile), ".bin")) {
+        try stderr.writeAll("warning - the provided data file does not have a .bin extension. Are you sure it's a valid topology?");
+        try stderr.flush();
+    }
+
+    return args;
+}
+
+// a generic copy file function lol
+fn copyFile(io: Io, src_path: []const u8, dst_path: []const u8) !void {
+    const src = try Io.Dir.cwd().openFile(io, src_path, .{});
+    defer src.close(io);
+    const dst = try Io.Dir.cwd().createFile(io, dst_path, .{ .truncate = true });
+    defer dst.close(io);
+
+    var rbuf: [4096]u8 = undefined;
+    var wbuf: [4096]u8 = undefined;
+    var reader = src.reader(io, &rbuf);
+    var writer = dst.writer(io, &wbuf);
+
+    while (true) {
+        const chunk = reader.interface.take(rbuf.len) catch |err| switch (err) {
+            error.EndOfStream => break,
+            error.ReadFailed => return err,
+        };
+        try writer.interface.writeAll(chunk);
+    }
+    try writer.interface.flush();
+}
+
+fn createUsedConfig(io: Io, dir: []const u8, src_config_path: []const u8) !void {
+    var buf: [std.fs.max_path_bytes]u8 = undefined;
+    const dst = try std.fmt.bufPrint(&buf, "{s}/used_config.json", .{dir});
+    try copyFile(io, src_config_path, dst);
+}
+
+fn createExecutionTimes(io: Io, dir: []const u8) !Io.File {
+    var path_buf: [std.fs.max_path_bytes]u8 = undefined;
+    const path = try std.fmt.bufPrint(&path_buf, "{s}/execution_times.ssv", .{dir});
+    const file = try Io.Dir.cwd().createFile(io, path, .{ .truncate = true });
+    var wbuf: [64]u8 = undefined;
+    var writer = file.writerStreaming(io, &wbuf);
+    try writer.interface.writeAll("batch run time_ms\n");
+    try writer.interface.flush();
+    return file;
 }

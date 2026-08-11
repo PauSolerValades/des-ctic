@@ -72,9 +72,11 @@ pub const SimConfig = struct {
     // session configuration
     offline_startup_ratio: Precision, // which proportion of the users start on vacation
     trace_to_file: bool,
+    //the config
+    users: []UserConf,
 
     /// Opens the json file and loads the distributions in memory
-    pub fn create(io: Io, gpa: Allocator, config_file: []const u8, stderr: *Io.Writer) (ParseError || JsonScannerError || ReadFileError || error{ InvalidCharacter, WriteFailed })!SimConfig {
+    pub fn create(io: Io, gpa: Allocator, config_file: []const u8, stderr: *Io.Writer) (ParseError || JsonScannerError || ReadFileError || std.json.ParseError(Scanner) || error{ InvalidCharacter, WriteFailed })!SimConfig {
         var config_buff: [4096]u8 = undefined;
         const content = try Io.Dir.cwd().readFile(io, config_file, &config_buff);
 
@@ -144,6 +146,10 @@ pub const SimConfig = struct {
                     config.trace_to_file = try readKeyBool(&scanner);
                     have.trace_to_file = true;
                 },
+                .users => {
+                    config.users = try std.json.parseFromTokenSourceLeaky([]UserConf, gpa, &scanner, .{});
+                    have.users = true;
+                },
             }
         }
 
@@ -162,15 +168,30 @@ pub const SimConfig = struct {
         self.user_policy.deinit(gpa);
     }
 
-    pub fn isValid(self: @This()) bool {
+    pub fn isValid(self: @This(), io: Io) bool {
         assert(self.horizon > 0);
         assert(self.duration > 0);
         assert(self.warmup_time > 0);
         assert(self.warmup_time + self.duration <= self.horizon);
 
+        var acc_prob: f32 = 0.0;
+        for (self.users) |u| {
+            std.Io.Dir.cwd().access(io, u.ecdf_post_creation_path, .{ .read = true }) catch {
+                return false;
+            };
+            std.Io.Dir.cwd().access(io, u.ecdf_parameters_path, .{ .read = true }) catch {
+                return false;
+            };
+            std.Io.Dir.cwd().access(io, u.ecdf_offset_creation_path, .{ .read = true }) catch {
+                return false;
+            };
+            acc_prob += u.probability;
+        }
+
         // check that the Distribution picked to generate the posts is not able to
         // generate a post later than warmup_time
-        return true;
+        // TODO: make a reasonable tolerance, not just made up
+        return std.math.approxEqRel(f32, acc_prob, 1.0, 0.001);
     }
 
     pub fn format(
@@ -203,6 +224,17 @@ pub const SimConfig = struct {
         try writer.print("{s: <24}:  {d: <23.2}\n", .{ "Duration", self.duration });
         try writer.print("{s: <24}:  {d: <23.2}\n", .{ "Horizon (Time)", self.horizon });
     }
+};
+
+const PairDist = enum { weibull, pareto, lognormal, gamma, exponential };
+
+pub const UserConf = struct {
+    session_duration: PairDist,
+    inter_session_time: PairDist,
+    ecdf_parameters_path: []const u8,
+    ecdf_post_creation_path: []const u8,
+    ecdf_offset_creation_path: []const u8,
+    probability: f32,
 };
 
 pub const SimResults = struct {

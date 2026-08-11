@@ -4,6 +4,11 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    const use_pool = b.option(bool, "use_pool", "Use timeline pool allocator") orelse false;
+
+    const opts = b.addOptions();
+    opts.addOption(bool, "use_pool", use_pool);
+
     const exe = b.addExecutable(.{
         .name = b.fmt("bskysim", .{}),
         .root_module = b.createModule(.{
@@ -12,6 +17,8 @@ pub fn build(b: *std.Build) !void {
             .optimize = optimize,
         }),
     });
+
+    exe.root_module.addOptions("build_options", opts);
 
     const eazy_args_dep = b.dependency("eazy_args", .{
         .target = target,
