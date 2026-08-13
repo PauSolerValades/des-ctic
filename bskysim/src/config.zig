@@ -11,7 +11,7 @@ const Token = std.json.Token;
 const entities = @import("entities.zig");
 
 const stats = @import("distributions");
-const ContDist = stats.ContinuousDistribution;
+const ContDist = stats.NonNegativeContinuousDistribution;
 const DiscDist = stats.DiscreteDistribution;
 
 const Categorical = stats.Categorical;
@@ -119,23 +119,23 @@ pub const SimConfig = struct {
                     have.user_policy = true;
                 },
                 .user_inter_action => {
-                    config.user_inter_action = try parse.parseContinuousDist(&scanner, stderr, "user_inter_action");
+                    config.user_inter_action = try parse.parseNonNegativeContinuousDist(&scanner, stderr, "user_inter_action");
                     have.user_inter_action = true;
                 },
                 .warmup_post_inter_creation => {
-                    config.warmup_post_inter_creation = try parse.parseContinuousDist(&scanner, stderr, "warmup_post_inter_creation");
+                    config.warmup_post_inter_creation = try parse.parseNonNegativeContinuousDist(&scanner, stderr, "warmup_post_inter_creation");
                     have.warmup_post_inter_creation = true;
                 },
                 .propagation_delay => {
-                    config.propagation_delay = try parse.parseContinuousDist(&scanner, stderr, "propagation_delay");
+                    config.propagation_delay = try parse.parseNonNegativeContinuousDist(&scanner, stderr, "propagation_delay");
                     have.propagation_delay = true;
                 },
                 .interaction_delay => {
-                    config.interaction_delay = try parse.parseContinuousDist(&scanner, stderr, "interaction_delay");
+                    config.interaction_delay = try parse.parseNonNegativeContinuousDist(&scanner, stderr, "interaction_delay");
                     have.interaction_delay = true;
                 },
                 .creation_delay => {
-                    config.creation_delay = try parse.parseContinuousDist(&scanner, stderr, "creation_delay");
+                    config.creation_delay = try parse.parseNonNegativeContinuousDist(&scanner, stderr, "creation_delay");
                     have.creation_delay = true;
                 },
                 .offline_startup_ratio => {
@@ -186,10 +186,17 @@ pub const SimConfig = struct {
                 return false;
             };
             acc_prob += u.probability;
+
+            // check if the name of the distribution is one in the type of the tagged union denoted
         }
 
-        // check that the Distribution picked to generate the posts is not able to
-        // generate a post later than warmup_time
+        // TODO: check that the Distribution picked to generate the posts is not able to
+        // generate a post later than warmup_time. that is:
+        // warmup_inter_post_time.sample(rng) <= conf.warmup_time <==> P(x > conf.warmup_time) = 0 <==> 1 - F(x) = 0
+        // warmup_inter_post_time.cdf(conf.warmup_time) = 1
+        // the problem is that not all the distributions implemented have cdf, and they are not even tested lolol
+        // therefore, we will ---for now--- trust the user
+
         // TODO: make a reasonable tolerance, not just made up
         return std.math.approxEqRel(f32, acc_prob, 1.0, 0.001);
     }
@@ -226,11 +233,11 @@ pub const SimConfig = struct {
     }
 };
 
-const PairDist = enum { weibull, pareto, lognormal, gamma, exponential };
+const DistTag = std.meta.Tag(ContDist(f32));
 
 pub const UserConf = struct {
-    session_duration: PairDist,
-    inter_session_time: PairDist,
+    session_duration: DistTag,
+    inter_session_time: DistTag,
     ecdf_parameters_path: []const u8,
     ecdf_post_creation_path: []const u8,
     ecdf_offset_creation_path: []const u8,

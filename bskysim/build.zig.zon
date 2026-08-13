@@ -33,8 +33,8 @@
     // internet connectivity.
     .dependencies = .{
         .distributions = .{
-            .url = "git+https://github.com/PauSolerValades/distributions#a0c0b99dec4423a53a0677a3af1b077b3762b104",
-            .hash = "distributions-0.1.0-oWxIHL9QAQDK5UePAuIQWku2NcBmA8HdI4ZKskZTujET",
+            .url = "git+https://github.com/PauSolerValades/distributions.git#8d99deecb368b7823d3f6f095e41aa2be26d62fa",
+            .hash = "distributions-1.0.0-oWxIHLqYAQD9WUKsIHyXGNacExf_jWc5iJmgoAJH69qc",
         },
         .eazy_args = .{
             .url = "git+https://github.com/PauSolerValades/eazy-args#54e6cceb35b4942341c5d1ea41518028a906fb2c",

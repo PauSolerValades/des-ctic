@@ -13,11 +13,12 @@ const dist = @import("distributions");
 const config = @import("config.zig");
 const entities = @import("entities.zig");
 const t = @import("traces.zig");
-const topo = @import("topology.zig");
+const topo = @import("Topology.zig");
 const gen = @import("events.zig");
 
-const Topology = topo.Topology;
-const SimState = topo.SimState;
+const Topology = topo;
+// const SimState = topo.SimState; // SimState lives in SimState.zig, intentionally not imported here
+
 
 const ds_pkg = @import("ds");
 const SMAList = ds_pkg.SegmentedMultiArrayList;

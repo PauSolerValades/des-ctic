@@ -5,7 +5,8 @@ const Token = std.json.Token;
 const Allocator = std.mem.Allocator;
 
 const stats = @import("distributions");
-const ContDist = stats.ContinuousDistribution;
+const ContDist = stats.NonNegativeContinuousDistribution;
+const CDist = stats.ContinuousDistribution;
 const DiscDist = stats.DiscreteDistribution;
 
 const Precision = @import("../config.zig").Precision;
@@ -30,7 +31,7 @@ pub const JsonScannerError = error{
     OutOfMemory,
 };
 
-pub fn parseContinuousDist(scanner: *Scanner, stderr: *Io.Writer, param_name: []const u8) (ParseError || JsonScannerError || error{ InvalidCharacter, WriteFailed })!ContDist(Precision) {
+pub fn parseNonNegativeContinuousDist(scanner: *Scanner, stderr: *Io.Writer, param_name: []const u8) (ParseError || JsonScannerError || error{ InvalidCharacter, WriteFailed })!ContDist(Precision) {
     if (try scanner.next() != Token.object_begin) return error.UnexpectedToken;
 
     const name_tok = try scanner.next();
@@ -43,12 +44,39 @@ pub fn parseContinuousDist(scanner: *Scanner, stderr: *Io.Writer, param_name: []
     };
 
     const dist = switch (tag) {
-        .exponential => try pcdist.parseExponential(scanner, stderr),
-        .pareto => try pcdist.parsePareto(scanner, stderr),
-        .uniform => try pcdist.parseUniform(scanner, param_name, stderr),
-        .constant => try pcdist.parseConstant(scanner, param_name, stderr),
+        .exponential => try pcdist.parseExponential(ContDist(Precision), scanner, stderr),
+        .pareto => try pcdist.parsePareto(ContDist(Precision), scanner, stderr),
+        .uniform => try pcdist.parseUniform(ContDist(Precision), scanner, param_name, stderr),
+        .constant => try pcdist.parseConstant(ContDist(Precision), scanner, param_name, stderr),
+        .lognormal => try pcdist.parseLognormal(ContDist(Precision), scanner, stderr),
+        .weibull => try pcdist.parseWeibull(ContDist(Precision), scanner, stderr),
+        .gamma => try pcdist.parseGamma(ContDist(Precision), scanner, stderr),
+        .gpareto => try pcdist.parseGeneralizedPareto(ContDist(Precision), scanner, stderr),
+    };
+
+    if (try scanner.next() != Token.object_end) return error.UnexpectedToken;
+    return dist;
+}
+
+pub fn parseContinuousDist(scanner: *Scanner, stderr: *Io.Writer, param_name: []const u8) (ParseError || JsonScannerError || error{ InvalidCharacter, WriteFailed })!CDist(Precision) {
+    if (try scanner.next() != Token.object_begin) return error.UnexpectedToken;
+
+    const name_tok = try scanner.next();
+    if (name_tok != Token.string) return error.UnexpectedToken;
+
+    const Tag = std.meta.Tag(CDist(Precision));
+    const tag = std.meta.stringToEnum(Tag, name_tok.string) orelse {
+        try stderr.print("unknown continuous distribution: '{s}'\n", .{name_tok.string});
+        return error.UnknownDistribution;
+    };
+
+    const dist = switch (tag) {
+        .exponential => try pcdist.parseExponential(CDist, scanner, stderr),
+        .pareto => try pcdist.parsePareto(CDist, scanner, stderr),
+        .uniform => try pcdist.parseUniform(CDist, scanner, param_name, stderr),
+        .constant => try pcdist.parseConstant(CDist, scanner, param_name, stderr),
         .normal => dist: {
-            const d = try pcdist.parseNormal(scanner, stderr);
+            const d = try pcdist.parseNormal(CDist, scanner, stderr);
             try stderr.print("parameter '{s}' could be negative, as 'normal' is not strictly positive\n", .{param_name});
             break :dist d;
         },
