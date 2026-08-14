@@ -79,8 +79,9 @@ pub fn main(init: std.process.Init) !void {
     defer config.delete(gpa);
     try stderr.flush(); // a warning in the distribution parsing can actually happen
 
-    if (config.isValid(init.io)) {
+    if (!config.isValid(init.io)) {
         try stderr.print("Invalid configuration. Please check the config parameters\n", .{});
+        try stderr.flush();
         std.process.exit(1);
     }
     std.debug.print("we have {d} categories\n", .{config.users.len});

@@ -125,6 +125,12 @@ pub fn readKeyBool(scanner: *Scanner) JsonScannerError!bool {
     };
 }
 
+pub fn readKeyString(gpa: Allocator, scanner: *Scanner) (JsonScannerError || Allocator.Error)![]u8 {
+    const tok = try scanner.next();
+    if (tok != Token.string) return error.UnexpectedToken;
+    return try gpa.dupe(u8, tok.string);
+}
+
 const Action = @import("../entities.zig").Action;
 pub fn parseUserPolicyCategorical(gpa: std.mem.Allocator, scanner: *Scanner, stderr: *Io.Writer) (ParseError || JsonScannerError || error{ InvalidCharacter, WriteFailed })!stats.Categorical(Precision, Action) {
     if (try scanner.next() != Token.object_begin) return error.UnexpectedToken;

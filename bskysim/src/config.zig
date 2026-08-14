@@ -5,6 +5,8 @@ const ArrayList = std.ArrayList;
 const Io = std.Io;
 const Allocator = std.mem.Allocator;
 const assert = std.debug.assert;
+
+const json = std.json;
 const Scanner = std.json.Scanner;
 const Token = std.json.Token;
 
@@ -23,7 +25,7 @@ pub const DataType = entities.Action;
 const parse = @import("dist-json-parse/parse.zig");
 const ParseError = parse.ParseError;
 const JsonScannerError = parse.JsonScannerError;
-const ReadFileError = std.Io.Dir.ReadFileError;
+const ReadFileError = std.Io.Dir.ReadFileAllocError;
 const readKeyNumber = parse.readKeyNumber;
 const readKeyBool = parse.readKeyBool;
 const readKeyString = parse.readKeyString;
@@ -77,9 +79,9 @@ pub const SimConfig = struct {
     users: []UserConf,
 
     /// Opens the json file and loads the distributions in memory
-    pub fn create(io: Io, gpa: Allocator, config_file: []const u8, stderr: *Io.Writer) (ParseError || JsonScannerError || ReadFileError || std.json.ParseError(Scanner) || error{ InvalidCharacter, WriteFailed })!SimConfig {
-        var config_buff: [4096 * 3]u8 = undefined;
-        const content = try Io.Dir.cwd().readFile(io, config_file, &config_buff);
+    pub fn create(io: Io, gpa: Allocator, config_file: []const u8, stderr: *Io.Writer) (parse.ParseError || parse.JsonScannerError || Io.Dir.ReadFileAllocError || json.ParseError(Scanner) || error{ InvalidCharacter, WriteFailed })!SimConfig {
+        const content = try Io.Dir.cwd().readFileAlloc(io, config_file, gpa, .unlimited);
+        defer gpa.free(content);
 
         var scanner = Scanner.initCompleteInput(gpa, content);
         defer scanner.deinit();
@@ -182,6 +184,18 @@ pub const SimConfig = struct {
         assert(self.warmup_time > 0);
         assert(self.warmup_time + self.duration <= self.horizon);
 
+        const Pair = struct {
+            first: DistTag,
+            second: DistTag,
+        };
+
+        var buffer: [4096]u8 = undefined;
+        var fba: std.heap.FixedBufferAllocator = .init(&buffer);
+        const allocator = fba.allocator();
+
+        var pairs: ArrayList(Pair) = .empty;
+        defer pairs.deinit(allocator);
+
         var acc_prob: f32 = 0.0;
         for (self.users) |u| {
             std.Io.Dir.cwd().access(io, u.ecdf_post_creation_path, .{ .read = true }) catch {
@@ -195,6 +209,14 @@ pub const SimConfig = struct {
             };
             acc_prob += u.probability;
 
+            // this should be not very big, a small linear search won't hurt anyone
+            for (pairs.items) |p| {
+                if (p.first == u.session_duration and p.second == u.inter_session_time) return false;
+            }
+            // terrorism
+            pairs.append(allocator, .{ .first = u.session_duration, .second = u.inter_session_time }) catch {
+                return false;
+            };
             // check if the name of the distribution is one in the type of the tagged union denoted
         }
 
@@ -273,12 +295,7 @@ fn parseUsers(gpa: Allocator, scanner: *Scanner, stderr: *Io.Writer) (ParseError
         if (tok != Token.object_begin) return error.UnexpectedToken;
 
         var user: UserConf = undefined;
-        var have_duration = false;
-        var have_inter = false;
-        var have_params = false;
-        var have_gaps = false;
-        var have_offsets = false;
-        var have_prob = false;
+        var has_params: std.StaticBitSet(6) = .empty;
 
         while (true) {
             const key = try scanner.next();
@@ -287,29 +304,29 @@ fn parseUsers(gpa: Allocator, scanner: *Scanner, stderr: *Io.Writer) (ParseError
 
             if (std.mem.eql(u8, key.string, "session_duration")) {
                 user.session_duration = try readDistTag(scanner, stderr);
-                have_duration = true;
+                has_params.set(0);
             } else if (std.mem.eql(u8, key.string, "inter_session_time")) {
                 user.inter_session_time = try readDistTag(scanner, stderr);
-                have_inter = true;
+                has_params.set(1);
             } else if (std.mem.eql(u8, key.string, "ecdf_parameters_path")) {
                 user.ecdf_parameters_path = try readKeyString(gpa, scanner);
-                have_params = true;
+                has_params.set(2);
             } else if (std.mem.eql(u8, key.string, "ecdf_post_creation_path")) {
                 user.ecdf_post_creation_path = try readKeyString(gpa, scanner);
-                have_gaps = true;
+                has_params.set(3);
             } else if (std.mem.eql(u8, key.string, "ecdf_offset_creation_path")) {
                 user.ecdf_offset_creation_path = try readKeyString(gpa, scanner);
-                have_offsets = true;
+                has_params.set(4);
             } else if (std.mem.eql(u8, key.string, "probability")) {
                 user.probability = try readKeyNumber(scanner, Precision);
-                have_prob = true;
+                has_params.set(5);
             } else {
                 try stderr.print("users: unknown param '{s}'\n", .{key.string});
                 return error.UnknownParameter;
             }
         }
 
-        if (!(have_duration and have_inter and have_params and have_gaps and have_offsets and have_prob)) {
+        if (has_params.count() != 6) {
             try stderr.print("users: missing required field (need 'session_duration', 'inter_session_time', 'ecdf_parameters_path', 'ecdf_post_creation_path', 'ecdf_offset_creation_path' and 'probability')\n", .{});
             return error.MissingField;
         }
