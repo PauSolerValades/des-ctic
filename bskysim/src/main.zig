@@ -79,12 +79,24 @@ pub fn main(init: std.process.Init) !void {
     defer config.delete(gpa);
     try stderr.flush(); // a warning in the distribution parsing can actually happen
 
-    if (!config.isValid(init.io)) {
-        try stderr.print("Invalid configuration. Please check the config parameters\n", .{});
+    config.isValid(init.io, stderr) catch |err| {
+        const msg: []const u8 = switch (err) {
+            error.NegativeHorizon => "horizon must be > 0\n",
+            error.NegativeDuration => "duration must be > 0\n",
+            error.NegativeWarmup => "warmup_time must be > 0\n",
+            error.DurationBiggerThenHorizon => "warmup_time + duration must not exceed horizon\n",
+            error.RepeatedUserPair => "users: repeated (session_duration, inter_session_time) pair\n",
+            error.ProbabilityNotOne => "users: probabilities must sum to 1\n",
+            error.EcdfPostFileError => "users: ecdf_post_creation file missing (see detail above)\n",
+            error.EcdfOffsetFileError => "users: ecdf_offset file missing (see detail above)\n",
+            error.SampleParamsFileError => "users: ecdf_parameters file missing (see detail above)\n",
+            error.WriteFailed => "", // stderr already dead
+            error.OutOfMemory => "out of memory while validating config\n",
+        };
+        try stderr.print("{s}", .{msg});
         try stderr.flush();
         std.process.exit(1);
-    }
-    std.debug.print("we have {d} categories\n", .{config.users.len});
+    };
 
     const startTimeLoadData = Io.Timestamp.now(init.io, .real);
     const sampled_topology = try loader.BinaryGraph.create(init.io, data_alloc, args.datafile);
@@ -134,8 +146,8 @@ pub fn main(init: std.process.Init) !void {
     //
 
     _ = seed;
-    // var state: SimState = try .create(init.io, init.arena, init.gpa, prng.random(), topology, config.users);
-    // defer state.delete(arena, gpa);
+    //     var state: SimState = try .create(init.io, init.arena, init.gpa, prng.random(), topology, config.users);
+    //     defer state.delete(arena, gpa);
 
     // try launchWorkers(
     //     gpa,

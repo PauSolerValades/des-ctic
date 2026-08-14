@@ -30,8 +30,8 @@ user_interact_post: PagedBitSet(16),
 timeline_pool: if (build_options.use_pool) TimelinePool else void = if (build_options.use_pool) undefined else {},
 
 pub fn create(io: Io, arena: Allocator, gpa: Allocator, rng: Random, topology: *const Topology, user_conf: []UserConf) !@This() {
-    // var users: std.MultiArrayList(User) = try .initCapacity(arena, topology.nodes);
-    // try wireUsers(io, rng, topology, &users, user_conf);
+    var users: std.MultiArrayList(User) = try .initCapacity(arena, topology.nodes);
+    try wireUsers(io, rng, topology, &users, user_conf);
 
     var timelines: []UserTimeline = try gpa.alloc(UserTimeline, users.len);
 

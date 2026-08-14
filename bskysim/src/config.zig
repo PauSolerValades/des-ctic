@@ -178,11 +178,12 @@ pub const SimConfig = struct {
         gpa.free(self.users);
     }
 
-    pub fn isValid(self: @This(), io: Io) bool {
-        assert(self.horizon > 0);
-        assert(self.duration > 0);
-        assert(self.warmup_time > 0);
-        assert(self.warmup_time + self.duration <= self.horizon);
+    pub fn isValid(self: @This(), io: Io, stderr: *Io.Writer) (error{OutOfMemory} || ConfigError || error{WriteFailed})!void {
+        if (self.horizon <= 0) return error.NegativeHorizon;
+        if (self.duration <= 0) return error.NegativeDuration;
+        if (self.warmup_time <= 0) return error.NegativeWarmup;
+
+        if (self.warmup_time + self.duration > self.horizon) return error.DurationBiggerThenHorizon;
 
         const Pair = struct {
             first: DistTag,
@@ -197,27 +198,29 @@ pub const SimConfig = struct {
         defer pairs.deinit(allocator);
 
         var acc_prob: f32 = 0.0;
-        for (self.users) |u| {
-            std.Io.Dir.cwd().access(io, u.ecdf_post_creation_path, .{ .read = true }) catch {
-                return false;
+        for (self.users, 0..) |u, i| {
+            const pair = .{ @tagName(u.session_duration), @tagName(u.inter_session_time) };
+
+            std.Io.Dir.cwd().access(io, u.ecdf_post_creation_path, .{ .read = true }) catch |err| {
+                try stderr.print("users[{d}] pair ({s}, {s}): ecdf_post_creation_path '{s}' not readable: {s}\n", .{ i, pair[0], pair[1], u.ecdf_post_creation_path, @errorName(err) });
+                return error.EcdfPostFileError;
             };
-            std.Io.Dir.cwd().access(io, u.ecdf_parameters_path, .{ .read = true }) catch {
-                return false;
+            std.Io.Dir.cwd().access(io, u.ecdf_parameters_path, .{ .read = true }) catch |err| {
+                try stderr.print("users[{d}] pair ({s}, {s}): ecdf_parameters_path '{s}' not readable: {s}\n", .{ i, pair[0], pair[1], u.ecdf_parameters_path, @errorName(err) });
+                return error.SampleParamsFileError;
             };
-            std.Io.Dir.cwd().access(io, u.ecdf_offset_creation_path, .{ .read = true }) catch {
-                return false;
+            std.Io.Dir.cwd().access(io, u.ecdf_offset_creation_path, .{ .read = true }) catch |err| {
+                try stderr.print("users[{d}] pair ({s}, {s}): ecdf_offset_creation_path '{s}' not readable: {s}\n", .{ i, pair[0], pair[1], u.ecdf_offset_creation_path, @errorName(err) });
+                return error.EcdfOffsetFileError;
             };
             acc_prob += u.probability;
 
             // this should be not very big, a small linear search won't hurt anyone
             for (pairs.items) |p| {
-                if (p.first == u.session_duration and p.second == u.inter_session_time) return false;
+                if (p.first == u.session_duration and p.second == u.inter_session_time) return error.RepeatedUserPair;
             }
             // terrorism
-            pairs.append(allocator, .{ .first = u.session_duration, .second = u.inter_session_time }) catch {
-                return false;
-            };
-            // check if the name of the distribution is one in the type of the tagged union denoted
+            try pairs.append(allocator, .{ .first = u.session_duration, .second = u.inter_session_time });
         }
 
         // TODO: check that the Distribution picked to generate the posts is not able to
@@ -228,8 +231,20 @@ pub const SimConfig = struct {
         // therefore, we will ---for now--- trust the user
 
         // TODO: make a reasonable tolerance, not just made up
-        return std.math.approxEqRel(f32, acc_prob, 1.0, 0.001);
+        if (!std.math.approxEqRel(f32, acc_prob, 1.0, 0.001)) return error.ProbabilityNotOne;
     }
+
+    pub const ConfigError = error{
+        NegativeHorizon,
+        NegativeDuration,
+        NegativeWarmup,
+        DurationBiggerThenHorizon,
+        RepeatedUserPair,
+        ProbabilityNotOne,
+        EcdfPostFileError,
+        EcdfOffsetFileError,
+        SampleParamsFileError,
+    };
 
     pub fn format(
         self: @This(),
