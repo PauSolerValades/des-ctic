@@ -71,6 +71,21 @@ pub fn eventCreateWarmup(rng: Random, simconf: *const SimConfig, user_id: u32, g
     };
 }
 
+pub fn eventCreateFirstPost(rng: Random, simconf: *const SimConfig, users: *const std.MultiArrayList(User), t_clock: f64, user_id: u32, session_id: u32, generated_events: u64) Event {
+    // Schedule the next post creation for this user
+    const creation_delay = simconf.creation_delay.sample(rng);
+    const duration_between_creation = users.items(.offset_creation_time)[user_id].sample(rng);
+
+    const new_post = Event{
+        .time = t_clock + duration_between_creation + creation_delay,
+        .type = .{ .create = {} },
+        .user_id = user_id,
+        .id = generated_events,
+        .session_gen = session_id,
+    };
+    return new_post;
+}
+
 pub fn eventCreatePost(rng: Random, simconf: *const SimConfig, users: *const std.MultiArrayList(User), t_clock: f64, user_id: u32, session_id: u32, generated_events: u64) Event {
     // Schedule the next post creation for this user
     const creation_delay = simconf.creation_delay.sample(rng);

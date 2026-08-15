@@ -19,7 +19,6 @@ const gen = @import("events.zig");
 const Topology = topo;
 const SimState = @import("SimState.zig");
 
-
 const ds_pkg = @import("ds");
 const SMAList = ds_pkg.SegmentedMultiArrayList;
 const PagedBitSet = ds_pkg.PagedBitSet;
@@ -329,7 +328,7 @@ pub fn simulate(
                         queue.push(gpa, first_action) catch return error.OutOfMemoryQueue;
                         metrics.generated_events += 1;
 
-                        const new_post = gen.eventCreatePost(rng, simconf, &state.users, t_clock, current_uid, user_session[current_uid], metrics.generated_events);
+                        const new_post = gen.eventCreateFirstPost(rng, simconf, &state.users, t_clock, current_uid, user_session[current_uid], metrics.generated_events);
                         queue.push(gpa, new_post) catch return error.OutOfMemoryQueue;
                         metrics.generated_events += 1;
 
