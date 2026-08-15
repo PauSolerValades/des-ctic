@@ -7,7 +7,6 @@ const SimulationConfig = struct {
     workers: ?u32,
     runs: ?u32,
     output_dir: ?[]const u8,
-    params_dir: ?[]const u8,
     config_file: []const u8,
     data_file: []const u8,
 };
@@ -44,8 +43,10 @@ pub fn build(b: *Build) void {
     var stderr_writer = Io.File.stderr().writer(io, &bufferr);
     const stderr = &stderr_writer.interface;
 
-    const config_path = b.option([]const u8, "config", "Path to the configuration for this Job") orelse
-        @panic("A configuration file must be provided");
+    const config_path = b.option([]const u8, "config", "Path to the configuration for this Job") orelse {
+        b.default_step = b.step("noop", "no-op: pass -Dconfig=... to run anything");
+        return;
+    };
     const recompile = b.option(Recompile, "compile", "Which parts of the pipeline to rebuild and move to the bin folder");
 
     const config_contents = Io.Dir.cwd().readFileAlloc(io, config_path, b.allocator, .unlimited) catch |err| {
@@ -180,11 +181,6 @@ fn simulationArguments(
     }
     if (config.runs) |n| {
         try arg_list.append(gpa, try std.fmt.bufPrint(n_buf, "-n{}", .{n}));
-    }
-
-    if (config.params_dir) |params_dir| {
-        try arg_list.append(gpa, "--paramsdir");
-        try arg_list.append(gpa, params_dir);
     }
 
     if (config.output_dir) |output_dir| {

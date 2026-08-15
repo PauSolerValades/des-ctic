@@ -1,11 +1,10 @@
 {
   "simulation": {
     "workers": 1,
-    "runs": 1,
+    "runs": 10,
     "output_dir": "steps/traces/10K_run",
-    "params_dir": "bskysim/params",
     "data_file": "bskysim/data/10K_monotonous.bin",
-    "config_file": "bskysim/simconfs/final.json"
+    "config_file": "job_config/prod.json"
   },
   "cascade": {
     "buckets": null,

@@ -96,7 +96,7 @@ pub const SimConfig = struct {
             if (tok != Token.string) return error.UnexpectedToken;
 
             const field = std.meta.stringToEnum(Field, tok.string) orelse {
-                try stderr.print("Parameter '{s}' is not an input parameter of the simulation", .{tok.string});
+                try stderr.print("Parameter '{s}' is not an input parameter of the simulation\n", .{tok.string});
                 return error.UnknownParameter;
             };
 
