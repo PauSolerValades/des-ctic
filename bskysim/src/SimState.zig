@@ -4,6 +4,11 @@ const Random = std.Random;
 const Allocator = std.mem.Allocator;
 const MultiArrayList = std.MultiArrayList;
 
+const stats = @import("distributions");
+const Cat = stats.Categorical;
+const DUnif = stats.DiscreteUniform;
+const ECDF = stats.ECDF;
+
 const build_options = @import("build_options");
 const pool = @import("pool.zig");
 
@@ -21,6 +26,8 @@ const Post = entities.Post;
 const TimelinePool = pool.TimelinePool;
 
 const UserConf = @import("config.zig").UserConf;
+const NNContDist = stats.NonNegativeContinuousDistribution;
+const DistTag = std.meta.Tag(NNContDist(f32));
 
 users: MultiArrayList(User),
 timelines: []UserTimeline,
@@ -31,12 +38,10 @@ timeline_pool: if (build_options.use_pool) TimelinePool else void = if (build_op
 
 pub fn create(io: Io, arena: Allocator, gpa: Allocator, rng: Random, topology: *const Topology, user_conf: []UserConf) !@This() {
     var users: std.MultiArrayList(User) = try .initCapacity(arena, topology.nodes);
-    try wireUsers(io, rng, topology, &users, user_conf);
+    try wireUsers(io, arena, rng, topology, &users, user_conf);
 
     var timelines: []UserTimeline = try gpa.alloc(UserTimeline, users.len);
 
-    // ponytail: slot_capacity 1024 matches original .create(gpa, 1024).
-    // Increase if stress test shows gpa_fallbacks > 0.
     var self = @This(){
         .users = users,
         .timelines = timelines,
@@ -57,39 +62,110 @@ pub fn create(io: Io, arena: Allocator, gpa: Allocator, rng: Random, topology: *
     return self;
 }
 
-/// every user in Size_monotonic.bin is in id order, that's perfect for us.
-fn wireUsers(io: Io, rng: Random, topology: *const Topology, users: *MultiArrayList(User), user_conf: []UserConf) !void {
-    // figure out how many distinct pairs are going to be in the
+/// Per-worker copy. users is deep-copied (ECDF bins stay shared with the
+/// original: immutable, owned by the main arena, which outlives all workers).
+/// Everything else is fresh per-worker scratch. Pair with delete().
+pub fn clone(self: *const @This(), arena: Allocator, gpa: Allocator) !@This() {
+    var self_copy = @This(){
+        .users = try self.users.clone(arena),
+        .timelines = try gpa.alloc(UserTimeline, self.users.len),
+        .posts = .empty,
+        .user_seen_post = try .initPages(arena, self.users.len, 16),
+        .user_interact_post = try .initPages(arena, self.users.len, 16),
+        .timeline_pool = if (build_options.use_pool) try TimelinePool.init(gpa, self.users.len, 1024) else {},
+    };
 
-    const sample_size = 1;
+    const tl_alloc = if (build_options.use_pool) self_copy.timeline_pool.allocator() else gpa;
+    for (0..self_copy.timelines.len) |i| {
+        self_copy.timelines[i] = try .create(tl_alloc, 1024);
+    }
+
+    return self_copy;
+}
+
+const tabular = @import("tabular");
+
+/// Builds a distribution from a row of a params table.
+fn distFromRow(tag: DistTag, params: []const f32) NNContDist(f32) {
+    return switch (tag) {
+        .constant => .{ .constant = .init(params[0]) },
+        .exponential => .{ .exponential = .init(params[0]) },
+        .uniform => .{ .uniform = .init(params[0], params[1], .cc) },
+        .lognormal => .{ .lognormal = .init(params[0], params[1]) },
+        .weibull => .{ .weibull = .init(params[0], params[1]) },
+        .gamma => .{ .gamma = .init(params[0], params[1]) },
+        .pareto => .{ .pareto = .init(params[0], params[1]) },
+        .gpareto => .{ .gpareto = .init(params[0], params[1], params[2]) },
+    };
+}
+
+/// every user in Size_monotonic.bin is in id order, that's perfect for us.
+fn wireUsers(io: Io, arena: Allocator, rng: Random, topology: *const Topology, users: *MultiArrayList(User), user_conf: []UserConf) !void {
+    // scratch: everything that dies when this function returns
+    var scratch: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    defer scratch.deinit();
+    const arloc = scratch.allocator();
+
+    var weights = try arloc.alloc(f32, user_conf.len);
+    var data = try arloc.alloc(usize, user_conf.len);
+    var ecdf_posts = try arloc.alloc(ECDF(f32, f32), user_conf.len);
+    var ecdf_offset = try arloc.alloc(ECDF(f32, f32), user_conf.len);
+    var session_params = try arloc.alloc(tabular.Table, user_conf.len);
+    var gap_params = try arloc.alloc(tabular.Table, user_conf.len);
+
+    for (0..user_conf.len) |i| {
+        const uconf = user_conf[i];
+
+        data[i] = i;
+        weights[i] = uconf.probability;
+
+        const posts_content = try Io.Dir.cwd().readFileAlloc(io, uconf.ecdf_post_creation_path, arloc, .unlimited);
+        const posts_tsv = try tabular.parse(arloc, posts_content, .{ .separator = '\t', .header = false });
+        // bins are shared by every User -> must outlive wireUsers -> outer arena
+        const ecdf_data = try posts_tsv.sliceRowAs(f32, 0, arloc);
+        ecdf_posts[i] = try ECDF(f32, f32).init(arena, ecdf_data);
+
+        const offset_content = try Io.Dir.cwd().readFileAlloc(io, uconf.ecdf_offset_creation_path, arloc, .unlimited);
+        const offset_tsv = try tabular.parse(arloc, offset_content, .{ .separator = '\t', .header = false });
+        ecdf_offset[i] = try ECDF(f32, f32).init(arena, try offset_tsv.sliceRowAs(f32, 0, arloc));
+
+        const session_content = try Io.Dir.cwd().readFileAlloc(io, uconf.session_params_path, arloc, .unlimited);
+        session_params[i] = try tabular.parse(arloc, session_content, .tsv);
+
+        const gap_content = try Io.Dir.cwd().readFileAlloc(io, uconf.gap_params_path, arloc, .unlimited);
+        gap_params[i] = try tabular.parse(arloc, gap_content, .tsv);
+    }
+
+    const cat: Cat(f32, usize) = try .init(arloc, weights, data);
+
     // iterate over the user_ids. As they are monotonically increasing its fine
     for (0..topology.nodes) |id| {
-        const u_session_length = rng.uintLessThan(usize, sample_size);
-        const shape_session_length = session_length_shape[u_session_length];
-        const scale_session_length = session_length_scale[u_session_length];
+        const pair_idx = cat.sample(rng);
+        const uconf = user_conf[pair_idx];
 
-        const u_session_gap = rng.uintLessThan(usize, sample_size);
-        const shape_session_gap = session_gap_shape[u_session_gap];
-        const scale_session_gap = session_gap_scale[u_session_gap];
+        const sd = session_params[pair_idx];
+        const gp = gap_params[pair_idx];
 
-        const u_creation = rng.uintLessThan(usize, sample_size);
-        const shape_creation = creation_shape[u_creation];
-        const scale_creation = creation_scale[u_creation];
-        // pick a random number for all of the three lists
-        const u = User{
+        const sd_row = DUnif(usize).init(0, sd.n_rows, .co).sample(rng);
+        const gp_row = DUnif(usize).init(0, gp.n_rows, .co).sample(rng);
+
+        // [1..] skips the did column — only the distribution params are floats.
+        const session_params_parsed = try tabular.fieldsAs(f32, sd.rows[sd_row][1..], arloc);
+        const gap_params_parsed = try tabular.fieldsAs(f32, gp.rows[gp_row][1..], arloc);
+
+        users.appendAssumeCapacity(.{
             .id = @intCast(id),
-            .session_duration = .init(shape_session_length, scale_session_length),
-            .inter_session_time = .init(shape_session_gap, scale_session_gap),
-            .inter_creation_time = .init(shape_creation, scale_creation),
-        };
-        users.appendAssumeCapacity(u);
+            .session_duration = distFromRow(uconf.session_duration, session_params_parsed),
+            .inter_session_time = distFromRow(uconf.inter_session_time, gap_params_parsed),
+            .inter_creation_time = ecdf_posts[pair_idx],
+            .offset_creation_time = ecdf_offset[pair_idx],
+        });
     }
 }
 
 pub fn dumpUsers(self: *const @This(), io: Io, path: []const u8) !void {
     const session_duration_slice = self.users.items(.session_duration);
     const inter_session_slice = self.users.items(.inter_session_time);
-    const inter_creation_slice = self.users.items(.inter_creation_time);
 
     const dist_file = try Io.Dir.cwd().createFile(io, path, .{ .truncate = true });
     defer dist_file.close(io);
@@ -98,17 +174,13 @@ pub fn dumpUsers(self: *const @This(), io: Io, path: []const u8) !void {
     var userdist_writer = dist_file.writerStreaming(io, &buf);
     const userdist = &userdist_writer.interface;
 
-    try userdist.writeAll("session_duration_xmin session_duration_alpha inter_session_time_xmin inter_session_time_alpha inter_creation_time_xmin inter_creation_time_alpha\n");
+    try userdist.writeAll("session_duration inter_session_time\n");
 
     for (0..self.users.len) |i| {
-        try userdist.print("{d} {d} {d} {d} {d} {d}\n", .{
-            session_duration_slice[i].scale,
-            session_duration_slice[i].shape,
-            inter_session_slice[i].scale,
-            inter_session_slice[i].shape,
-            inter_creation_slice[i].scale,
-            inter_creation_slice[i].shape,
-        });
+        try session_duration_slice[i].format(userdist);
+        try userdist.writeByte(' ');
+        try inter_session_slice[i].format(userdist);
+        try userdist.writeByte('\n');
     }
     try userdist.flush();
 }
@@ -160,20 +232,3 @@ pub const UserSampled = struct {
     inter_creation_time_xmin: f32,
     inter_creation_time_alpha: f32,
 };
-
-fn fillPareto(io: std.Io, filename: []const u8, shape_buff: []f32, scale_buff: []f32) !void {
-    var buf: [32 * 10000]u8 = undefined;
-    const contents = try std.Io.Dir.readFile(std.Io.Dir.cwd(), io, filename, &buf);
-    var tok = std.mem.tokenizeSequence(u8, contents, "\n");
-    var index: usize = 0;
-    while (tok.next()) |line| {
-        var values = std.mem.tokenizeAny(u8, line, " \t");
-
-        const shape_str = values.next() orelse continue;
-        const scale_str = values.next() orelse continue;
-
-        shape_buff[index] = try std.fmt.parseFloat(f32, shape_str);
-        scale_buff[index] = try std.fmt.parseFloat(f32, scale_str);
-        index += 1;
-    }
-}

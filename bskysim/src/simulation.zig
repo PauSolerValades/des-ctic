@@ -17,7 +17,7 @@ const topo = @import("Topology.zig");
 const gen = @import("events.zig");
 
 const Topology = topo;
-// const SimState = topo.SimState; // SimState lives in SimState.zig, intentionally not imported here
+const SimState = @import("SimState.zig");
 
 
 const ds_pkg = @import("ds");

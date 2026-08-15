@@ -13,7 +13,7 @@ const Token = std.json.Token;
 const entities = @import("entities.zig");
 
 const stats = @import("distributions");
-const ContDist = stats.NonNegativeContinuousDistribution;
+const NNContDist = stats.NonNegativeContinuousDistribution;
 const DiscDist = stats.DiscreteDistribution;
 
 const Categorical = stats.Categorical;
@@ -65,13 +65,13 @@ pub const SimConfig = struct {
     warmup_time: f64, // time when warmup ends
     // user related actions
     user_policy: Categorical(f32, entities.Action),
-    user_inter_action: ContDist(f32), // time between a user two actions
+    user_inter_action: NNContDist(f32), // time between a user two actions
     // to init posts
-    warmup_post_inter_creation: ContDist(f32), // time of the post created in the simulation
+    warmup_post_inter_creation: NNContDist(f32), // time of the post created in the simulation
     // delays on posts transmissions
-    propagation_delay: ContDist(f32), // time between an action over a post and showing up followers timeline
-    interaction_delay: ContDist(f32), // time between
-    creation_delay: ContDist(f32),
+    propagation_delay: NNContDist(f32), // time between an action over a post and showing up followers timeline
+    interaction_delay: NNContDist(f32), // time between
+    creation_delay: NNContDist(f32),
     // session configuration
     offline_startup_ratio: Precision, // which proportion of the users start on vacation
     trace_to_file: bool,
@@ -171,7 +171,8 @@ pub const SimConfig = struct {
         self.user_policy.deinit(gpa);
 
         for (self.users) |u| {
-            gpa.free(u.ecdf_parameters_path);
+            gpa.free(u.session_params_path);
+            gpa.free(u.gap_params_path);
             gpa.free(u.ecdf_post_creation_path);
             gpa.free(u.ecdf_offset_creation_path);
         }
@@ -205,8 +206,12 @@ pub const SimConfig = struct {
                 try stderr.print("users[{d}] pair ({s}, {s}): ecdf_post_creation_path '{s}' not readable: {s}\n", .{ i, pair[0], pair[1], u.ecdf_post_creation_path, @errorName(err) });
                 return error.EcdfPostFileError;
             };
-            std.Io.Dir.cwd().access(io, u.ecdf_parameters_path, .{ .read = true }) catch |err| {
-                try stderr.print("users[{d}] pair ({s}, {s}): ecdf_parameters_path '{s}' not readable: {s}\n", .{ i, pair[0], pair[1], u.ecdf_parameters_path, @errorName(err) });
+            std.Io.Dir.cwd().access(io, u.session_params_path, .{ .read = true }) catch |err| {
+                try stderr.print("users[{d}] pair ({s}, {s}): session_params_path '{s}' not readable: {s}\n", .{ i, pair[0], pair[1], u.session_params_path, @errorName(err) });
+                return error.SampleParamsFileError;
+            };
+            std.Io.Dir.cwd().access(io, u.gap_params_path, .{ .read = true }) catch |err| {
+                try stderr.print("users[{d}] pair ({s}, {s}): gap_params_path '{s}' not readable: {s}\n", .{ i, pair[0], pair[1], u.gap_params_path, @errorName(err) });
                 return error.SampleParamsFileError;
             };
             std.Io.Dir.cwd().access(io, u.ecdf_offset_creation_path, .{ .read = true }) catch |err| {
@@ -278,12 +283,13 @@ pub const SimConfig = struct {
     }
 };
 
-const DistTag = std.meta.Tag(ContDist(f32));
+const DistTag = std.meta.Tag(NNContDist(f32));
 
 pub const UserConf = struct {
     session_duration: DistTag,
     inter_session_time: DistTag,
-    ecdf_parameters_path: []const u8,
+    session_params_path: []const u8,
+    gap_params_path: []const u8,
     ecdf_post_creation_path: []const u8,
     ecdf_offset_creation_path: []const u8,
     probability: f32,
@@ -310,7 +316,7 @@ fn parseUsers(gpa: Allocator, scanner: *Scanner, stderr: *Io.Writer) (ParseError
         if (tok != Token.object_begin) return error.UnexpectedToken;
 
         var user: UserConf = undefined;
-        var has_params: std.StaticBitSet(6) = .empty;
+        var has_params: std.StaticBitSet(7) = .empty;
 
         while (true) {
             const key = try scanner.next();
@@ -323,26 +329,29 @@ fn parseUsers(gpa: Allocator, scanner: *Scanner, stderr: *Io.Writer) (ParseError
             } else if (std.mem.eql(u8, key.string, "inter_session_time")) {
                 user.inter_session_time = try readDistTag(scanner, stderr);
                 has_params.set(1);
-            } else if (std.mem.eql(u8, key.string, "ecdf_parameters_path")) {
-                user.ecdf_parameters_path = try readKeyString(gpa, scanner);
+            } else if (std.mem.eql(u8, key.string, "session_params_path")) {
+                user.session_params_path = try readKeyString(gpa, scanner);
                 has_params.set(2);
+            } else if (std.mem.eql(u8, key.string, "gap_params_path")) {
+                user.gap_params_path = try readKeyString(gpa, scanner);
+                has_params.set(3);
             } else if (std.mem.eql(u8, key.string, "ecdf_post_creation_path")) {
                 user.ecdf_post_creation_path = try readKeyString(gpa, scanner);
-                has_params.set(3);
+                has_params.set(4);
             } else if (std.mem.eql(u8, key.string, "ecdf_offset_creation_path")) {
                 user.ecdf_offset_creation_path = try readKeyString(gpa, scanner);
-                has_params.set(4);
+                has_params.set(5);
             } else if (std.mem.eql(u8, key.string, "probability")) {
                 user.probability = try readKeyNumber(scanner, Precision);
-                has_params.set(5);
+                has_params.set(6);
             } else {
                 try stderr.print("users: unknown param '{s}'\n", .{key.string});
                 return error.UnknownParameter;
             }
         }
 
-        if (has_params.count() != 6) {
-            try stderr.print("users: missing required field (need 'session_duration', 'inter_session_time', 'ecdf_parameters_path', 'ecdf_post_creation_path', 'ecdf_offset_creation_path' and 'probability')\n", .{});
+        if (has_params.count() != 7) {
+            try stderr.print("users: missing required field (need 'session_duration', 'inter_session_time', 'session_params_path', 'gap_params_path', 'ecdf_post_creation_path', 'ecdf_offset_creation_path' and 'probability')\n", .{});
             return error.MissingField;
         }
         try users.append(gpa, user);

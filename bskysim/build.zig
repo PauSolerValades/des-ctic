@@ -38,10 +38,17 @@ pub fn build(b: *std.Build) !void {
     });
     const distributions_mod = distributions_dep.module("distributions");
 
+    const tabular_dep = b.dependency("tabular", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    const tabular_mod = tabular_dep.module("tabular");
+
     // link the dependencies in here
     exe.root_module.addImport("eazy_args", eazy_args_mod);
     exe.root_module.addImport("ds", ds_mod);
     exe.root_module.addImport("distributions", distributions_mod);
+    exe.root_module.addImport("tabular", tabular_mod);
 
     b.installArtifact(exe); // creates the exe in the folder
 

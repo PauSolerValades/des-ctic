@@ -44,6 +44,10 @@
             .url = "git+https://github.com/PauSolerValades/ds-bskysim.git#40ecabfd5fe6b4b7d9f7945b904b48bc141e62f6",
             .hash = "ds_bskysim-0.0.1--ZLA_rzGAACQK0QfZDOmJWbRwQQIxHMEjtgVQ9pHnrye",
         },
+        .tabular = .{
+            .url = "git+https://github.com/PauSolerValades/tabular.git#04b1852fc489bd3ec24e780992dc74983614629d",
+            .hash = "tabular-0.0.0-PB3WTJxrAACo4L42i8OnhqynUJE1iX7PBwZjhLAigwVg",
+        },
     },
     .paths = .{
         "build.zig",

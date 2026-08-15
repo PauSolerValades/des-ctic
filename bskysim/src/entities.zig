@@ -6,7 +6,8 @@ const Io = std.Io;
 const Heap = @import("ds").Heap;
 const stats = @import("distributions");
 
-const Pareto = stats.Pareto;
+const ECDF = stats.ECDF;
+const NNContDist = stats.NonNegativeContinuousDistribution;
 
 const config = @import("config.zig");
 
@@ -22,10 +23,10 @@ pub const User = struct {
     is_online: bool = false,
     session_gen: u32 = 0,
 
-    session_duration: Pareto(f32),
-    inter_session_time: Pareto(f32),
-    inter_creation_time: Pareto(f32),
-
+    session_duration: NNContDist(f32),
+    inter_session_time: NNContDist(f32),
+    inter_creation_time: ECDF(f32, f32),
+    offset_creation_time: ECDF(f32, f32),
     num_posts: u32 = 0,
     session_start_time: f64 = 0.0,
 };
