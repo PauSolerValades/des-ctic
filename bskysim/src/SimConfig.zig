@@ -41,6 +41,18 @@ const readKeyString = parse.readKeyString;
 
 pub const Precision: type = f32;
 
+pub const ConfigError = error{
+    NegativeHorizon,
+    NegativeDuration,
+    NegativeWarmup,
+    DurationBiggerThenHorizon,
+    RepeatedUserPair,
+    ProbabilityNotOne,
+    EcdfPostFileError,
+    EcdfOffsetFileError,
+    SampleParamsFileError,
+};
+
 const Field = blk: {
     const fields = @typeInfo(@This()).@"struct".fields;
     var names: [fields.len][]const u8 = undefined;
@@ -50,6 +62,18 @@ const Field = blk: {
         vals[i] = i;
     }
     break :blk @Enum(u8, .exhaustive, &names, &vals);
+};
+
+const DistTag = std.meta.Tag(NNContDist(f32));
+
+pub const UserConf = struct {
+    session_duration: DistTag,
+    inter_session_time: DistTag,
+    session_params_path: []const u8,
+    gap_params_path: []const u8,
+    ecdf_post_creation_path: []const u8,
+    ecdf_offset_creation_path: []const u8,
+    probability: f32,
 };
 
 seed: ?u64,
@@ -196,18 +220,6 @@ pub fn isValid(self: *const @This(), io: Io, stderr: *Io.Writer) (error{OutOfMem
     if (!std.math.approxEqRel(f32, acc_prob, 1.0, 0.001)) return error.ProbabilityNotOne;
 }
 
-pub const ConfigError = error{
-    NegativeHorizon,
-    NegativeDuration,
-    NegativeWarmup,
-    DurationBiggerThenHorizon,
-    RepeatedUserPair,
-    ProbabilityNotOne,
-    EcdfPostFileError,
-    EcdfOffsetFileError,
-    SampleParamsFileError,
-};
-
 pub fn format(
     self: *const @This(),
     writer: *std.Io.Writer,
@@ -235,15 +247,3 @@ pub fn format(
     try writer.print("{s: <24}:  {d: <23.2}\n", .{ "Duration", self.duration });
     try writer.print("{s: <24}:  {d: <23.2}\n", .{ "Horizon (Time)", self.horizon });
 }
-
-const DistTag = std.meta.Tag(NNContDist(f32));
-
-pub const UserConf = struct {
-    session_duration: DistTag,
-    inter_session_time: DistTag,
-    session_params_path: []const u8,
-    gap_params_path: []const u8,
-    ecdf_post_creation_path: []const u8,
-    ecdf_offset_creation_path: []const u8,
-    probability: f32,
-};
