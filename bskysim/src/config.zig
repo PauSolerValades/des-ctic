@@ -112,7 +112,7 @@ pub const SimConfig = struct {
                 .creation_delay => config.creation_delay = try parse.parseNonNegativeContinuousDist(&scanner, stderr, "creation_delay"),
                 .offline_startup_ratio => config.offline_startup_ratio = try readKeyNumber(&scanner, Precision),
                 .trace_to_file => config.trace_to_file = try readKeyBool(&scanner),
-                .users => config.users = try parseUsers(gpa, &scanner, stderr),
+                .users => config.users = try parse.parseUsers(gpa, &scanner, stderr),
             }
         }
 
@@ -259,62 +259,6 @@ fn readDistTag(scanner: *Scanner, stderr: *Io.Writer) (ParseError || JsonScanner
         try stderr.print("users: unknown distribution tag '{s}'\n", .{tok.string});
         return error.UnknownDistribution;
     };
-}
-
-fn parseUsers(gpa: Allocator, scanner: *Scanner, stderr: *Io.Writer) (ParseError || JsonScannerError || error{ InvalidCharacter, WriteFailed })![]UserConf {
-    if (try scanner.next() != Token.array_begin) return error.UnexpectedToken;
-
-    var users: ArrayList(UserConf) = .empty;
-    defer users.deinit(gpa);
-
-    while (true) {
-        const tok = try scanner.next();
-        if (tok == Token.array_end) break;
-        if (tok != Token.object_begin) return error.UnexpectedToken;
-
-        var user: UserConf = undefined;
-        var has_params: std.StaticBitSet(7) = .empty;
-
-        while (true) {
-            const key = try scanner.next();
-            if (key == Token.object_end) break;
-            if (key != Token.string) return error.UnexpectedToken;
-
-            if (std.mem.eql(u8, key.string, "session_duration")) {
-                user.session_duration = try readDistTag(scanner, stderr);
-                has_params.set(0);
-            } else if (std.mem.eql(u8, key.string, "inter_session_time")) {
-                user.inter_session_time = try readDistTag(scanner, stderr);
-                has_params.set(1);
-            } else if (std.mem.eql(u8, key.string, "session_params_path")) {
-                user.session_params_path = try readKeyString(gpa, scanner);
-                has_params.set(2);
-            } else if (std.mem.eql(u8, key.string, "gap_params_path")) {
-                user.gap_params_path = try readKeyString(gpa, scanner);
-                has_params.set(3);
-            } else if (std.mem.eql(u8, key.string, "ecdf_post_creation_path")) {
-                user.ecdf_post_creation_path = try readKeyString(gpa, scanner);
-                has_params.set(4);
-            } else if (std.mem.eql(u8, key.string, "ecdf_offset_creation_path")) {
-                user.ecdf_offset_creation_path = try readKeyString(gpa, scanner);
-                has_params.set(5);
-            } else if (std.mem.eql(u8, key.string, "probability")) {
-                user.probability = try readKeyNumber(scanner, Precision);
-                has_params.set(6);
-            } else {
-                try stderr.print("users: unknown param '{s}'\n", .{key.string});
-                return error.UnknownParameter;
-            }
-        }
-
-        if (has_params.count() != 7) {
-            try stderr.print("users: missing required field (need 'session_duration', 'inter_session_time', 'session_params_path', 'gap_params_path', 'ecdf_post_creation_path', 'ecdf_offset_creation_path' and 'probability')\n", .{});
-            return error.MissingField;
-        }
-        try users.append(gpa, user);
-    }
-
-    return users.toOwnedSlice(gpa);
 }
 
 pub const SimResults = struct {
