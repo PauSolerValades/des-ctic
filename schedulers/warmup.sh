@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 # Run from the repo root (des-ctic-dev). Warmup sweep: for each dataset ×
-# each sim-params file in job_config/warmup/params/, run the full pipeline
-# (5 runs), writing to steps/warmup/ in the layout the which-warmup
-# analysis expects ({N}-ticks traces, warmup-{N}.tsv cascades,
-# warmup-{N} datasets). Compiles everything only on the first combo.
-# Deletes steps/warmup first.
+# each sim-params file in configs/simconfs/warmup/params/, run the
+# simulation only (5 runs) into steps/warmup/traces/<size>-warmup/<w>-ticks/
+# — the layout the which-warmup analysis expects. No cascades/datasets.
+# Compiles bskysim only on the first combo. Deletes steps/warmup first.
 # Usage: ./schedulers/warmup.sh [--dry-run]
 set -euo pipefail
 
@@ -24,10 +23,9 @@ for name in 10K 50K 100K 250K 500K 750K 1M; do
         *)       workers=1 ;;
     esac
 
-    for params in job_config/warmup/params/w*.json; do
+    for params in configs/simconfs/warmup/params/w*.json; do
         w="$(basename "$params" .json)"; w="${w#w}"
         traces="steps/warmup/traces/${name}-warmup/${w}-ticks"
-        cascades="steps/warmup/cascades/${name}-warmup/warmup-${w}.tsv"
         cfg="steps/warmup/tmp/${name}-w${w}.json"
 
         cat > "$cfg" <<EOF
@@ -39,28 +37,17 @@ for name in 10K 50K 100K 250K 500K 750K 1M; do
     "data_file": "data/monotonic/${name}_monotonic.bin",
     "config_file": "$params"
   },
-  "cascade": {
-    "buckets": null,
-    "bucket_file": null,
-    "output_file": "$cascades",
-    "traces_dir": "$traces"
-  },
-  "dataset": {
-    "output_dir": "steps/warmup/datasets/${name}-warmup/warmup-${w}",
-    "cascades_ssv": "$cascades",
-    "likes_ssv": "${cascades%.tsv}_likes.tsv",
-    "traces_dir": "$traces",
-    "dataset": "all"
-  }
+  "cascade": null,
+  "dataset": null
 }
 EOF
 
         echo "[$name w$w] $(date)"
         if [ "$first" -eq 1 ]; then
             if [ "$DRY" = "--dry-run" ]; then
-                echo "  zig build -Dconfig=$cfg -Dcompile=all all"
+                echo "  zig build -Dconfig=$cfg -Dcompile=simulation all"
             else
-                zig build -Dconfig="$cfg" -Dcompile=all all
+                zig build -Dconfig="$cfg" -Dcompile=simulation all
             fi
             first=0
         else

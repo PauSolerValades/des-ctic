@@ -20,13 +20,6 @@
       "mean": 3
     }
   },
-  "warmup_post_inter_creation": {
-    "uniform": {
-      "min": 0,
-      "max": 1000,
-      "interval": "oc"
-    }
-  },
   "propagation_delay": {
     "constant": {
       "value": 1

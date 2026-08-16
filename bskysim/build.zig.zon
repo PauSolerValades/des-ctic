@@ -32,9 +32,6 @@
     // Once all dependencies are fetched, `zig build` no longer requires
     // internet connectivity.
     .dependencies = .{
-        .distributions = .{
-            .path = "../../distributions",
-        },
         .eazy_args = .{
             .url = "git+https://github.com/PauSolerValades/eazy-args.git#54e6cceb35b4942341c5d1ea41518028a906fb2c",
             .hash = "eazy_args-0.2.0-c374-NXlAQAGpNWGT_K3n9DCPbP_WY6fjhQXH8q23tDD",
@@ -46,6 +43,10 @@
         .tabular = .{
             .url = "git+https://github.com/PauSolerValades/tabular.git#04b1852fc489bd3ec24e780992dc74983614629d",
             .hash = "tabular-0.0.0-PB3WTJxrAACo4L42i8OnhqynUJE1iX7PBwZjhLAigwVg",
+        },
+        .distributions = .{
+            .url = "git+https://github.com/PauSolerValades/distributions.git#f632a5c0d12dcc56441d1e88464bb221490a8dc3",
+            .hash = "distributions-1.0.0-oWxIHLmbAQBAlCpbiEKgfbma-ASP836HqqSfuO4CK9FD",
         },
     },
     .paths = .{
