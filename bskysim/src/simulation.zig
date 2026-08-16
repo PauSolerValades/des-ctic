@@ -25,7 +25,6 @@ const ds_pkg = @import("ds");
 const SMAList = ds_pkg.SegmentedMultiArrayList;
 const PagedBitSet = ds_pkg.PagedBitSet;
 
-
 const Event = entities.Event;
 const Action = entities.Action;
 const Session = entities.Session;
@@ -222,8 +221,10 @@ pub fn simulate(
     queue.ensureTotalCapacity(gpa, 4 * topology.csr.len) catch return error.OutOfMemoryQueue;
     defer queue.deinit(gpa);
 
-    // Pgraphost generation on init
-    try stageOne(gpa, arena, rng, simconf, topology, state, &queue, &metrics, &t_clock, traces);
+    // generation on init
+    if (simconf.warmup_time != 0) {
+        try stageOne(gpa, arena, rng, simconf, topology, state, &queue, &metrics, &t_clock, traces);
+    }
     // queue.clearRetainingCapacity();
 
     // Warmup propagated all posts into getBackground(). Swap so they're
