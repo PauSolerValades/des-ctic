@@ -479,13 +479,7 @@ fn copyFile(io: Io, src_path: []const u8, dst_path: []const u8) !void {
     var reader = src.reader(io, &rbuf);
     var writer = dst.writer(io, &wbuf);
 
-    while (true) {
-        const chunk = reader.interface.take(rbuf.len) catch |err| switch (err) {
-            error.EndOfStream => break,
-            error.ReadFailed => return err,
-        };
-        try writer.interface.writeAll(chunk);
-    }
+    _ = try reader.interface.streamRemaining(&writer.interface);
     try writer.interface.flush();
 }
 

@@ -37,7 +37,7 @@
             .hash = "distributions-1.0.0-oWxIHLqYAQD9WUKsIHyXGNacExf_jWc5iJmgoAJH69qc",
         },
         .eazy_args = .{
-            .url = "git+https://github.com/PauSolerValades/eazy-args#54e6cceb35b4942341c5d1ea41518028a906fb2c",
+            .url = "git+https://github.com/PauSolerValades/eazy-args.git#54e6cceb35b4942341c5d1ea41518028a906fb2c",
             .hash = "eazy_args-0.2.0-c374-NXlAQAGpNWGT_K3n9DCPbP_WY6fjhQXH8q23tDD",
         },
         .ds_bskysim = .{
