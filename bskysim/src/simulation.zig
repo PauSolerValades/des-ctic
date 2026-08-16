@@ -110,7 +110,7 @@ fn stageOne(
 
     for (0..state.users.len) |uid| {
         // we create a creation event
-        const create_post = gen.eventCreateFirstPost(rng, simconf, @intCast(uid), metrics.generated_events);
+        const create_post = gen.eventCreateFirstPost(rng, simconf, &state.users, t_clock.*, @intCast(uid), 0, metrics.generated_events);
         queue.push(gpa, create_post) catch return error.OutOfMemoryQueue;
         metrics.generated_events += 1;
     }

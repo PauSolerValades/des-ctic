@@ -41,8 +41,6 @@ const Field = blk: {
     break :blk @Enum(u8, .exhaustive, &names, &vals);
 };
 
-var have: std.enums.EnumFieldStruct(Field, bool, false) = .{};
-
 /// Input parameters of the simulation.
 /// They are the following:
 /// - seed: control randomness
@@ -51,7 +49,6 @@ var have: std.enums.EnumFieldStruct(Field, bool, false) = .{};
 /// - warmup_time: timestamp where warmup ends
 /// - user_policy: Categorical with (repost, like, and ignore)
 /// - user_inter_action: time between two user actions
-/// - warmup_post_inter_creation: time between posts in the init of the simulation
 /// - propagation_delay: time that a post from being propagated into appear in another user timeline.
 /// - interaction_delay: time between a user initiating the action and actually performing the action
 /// - creation_delay: time between a user deciding to create the post and the actual post being created
@@ -66,8 +63,6 @@ pub const SimConfig = struct {
     // user related actions
     user_policy: Categorical(f32, entities.Action),
     user_inter_action: NNContDist(f32), // time between a user two actions
-    // to init posts
-    warmup_post_inter_creation: NNContDist(f32), // time of the post created in the simulation
     // delays on posts transmissions
     propagation_delay: NNContDist(f32), // time between an action over a post and showing up followers timeline
     interaction_delay: NNContDist(f32), // time between
@@ -89,6 +84,8 @@ pub const SimConfig = struct {
         if (try scanner.next() != Token.object_begin) return error.UnexpectedToken;
 
         var config: SimConfig = undefined;
+        const num_fields: usize = @typeInfo(Field).@"enum".fields.len;
+        var have: std.StaticBitSet(num_fields) = .empty;
 
         while (true) {
             const tok = try scanner.next();
@@ -100,67 +97,30 @@ pub const SimConfig = struct {
                 return error.UnknownParameter;
             };
 
+            // bit index == enum value, so name lookup stays free
+            have.set(@intFromEnum(field));
+
             switch (field) {
-                .seed => {
-                    config.seed = @intFromFloat(try readKeyNumber(&scanner, f64));
-                    have.seed = true;
-                },
-                .horizon => {
-                    config.horizon = try readKeyNumber(&scanner, f64);
-                    have.horizon = true;
-                },
-                .duration => {
-                    config.duration = try readKeyNumber(&scanner, f64);
-                    have.duration = true;
-                },
-                .warmup_time => {
-                    config.warmup_time = try readKeyNumber(&scanner, f64);
-                    have.warmup_time = true;
-                },
-                .user_policy => {
-                    config.user_policy = try parse.parseUserPolicyCategorical(gpa, &scanner, stderr);
-                    have.user_policy = true;
-                },
-                .user_inter_action => {
-                    config.user_inter_action = try parse.parseNonNegativeContinuousDist(&scanner, stderr, "user_inter_action");
-                    have.user_inter_action = true;
-                },
-                .warmup_post_inter_creation => {
-                    config.warmup_post_inter_creation = try parse.parseNonNegativeContinuousDist(&scanner, stderr, "warmup_post_inter_creation");
-                    have.warmup_post_inter_creation = true;
-                },
-                .propagation_delay => {
-                    config.propagation_delay = try parse.parseNonNegativeContinuousDist(&scanner, stderr, "propagation_delay");
-                    have.propagation_delay = true;
-                },
-                .interaction_delay => {
-                    config.interaction_delay = try parse.parseNonNegativeContinuousDist(&scanner, stderr, "interaction_delay");
-                    have.interaction_delay = true;
-                },
-                .creation_delay => {
-                    config.creation_delay = try parse.parseNonNegativeContinuousDist(&scanner, stderr, "creation_delay");
-                    have.creation_delay = true;
-                },
-                .offline_startup_ratio => {
-                    config.offline_startup_ratio = try readKeyNumber(&scanner, Precision);
-                    have.offline_startup_ratio = true;
-                },
-                .trace_to_file => {
-                    config.trace_to_file = try readKeyBool(&scanner);
-                    have.trace_to_file = true;
-                },
-                .users => {
-                    config.users = try parseUsers(gpa, &scanner, stderr);
-                    have.users = true;
-                },
+                .seed => config.seed = @intFromFloat(try readKeyNumber(&scanner, f64)),
+                .horizon => config.horizon = try readKeyNumber(&scanner, f64),
+                .duration => config.duration = try readKeyNumber(&scanner, f64),
+                .warmup_time => config.warmup_time = try readKeyNumber(&scanner, f64),
+                .user_policy => config.user_policy = try parse.parseUserPolicyCategorical(gpa, &scanner, stderr),
+                .user_inter_action => config.user_inter_action = try parse.parseNonNegativeContinuousDist(&scanner, stderr, "user_inter_action"),
+                .propagation_delay => config.propagation_delay = try parse.parseNonNegativeContinuousDist(&scanner, stderr, "propagation_delay"),
+                .interaction_delay => config.interaction_delay = try parse.parseNonNegativeContinuousDist(&scanner, stderr, "interaction_delay"),
+                .creation_delay => config.creation_delay = try parse.parseNonNegativeContinuousDist(&scanner, stderr, "creation_delay"),
+                .offline_startup_ratio => config.offline_startup_ratio = try readKeyNumber(&scanner, Precision),
+                .trace_to_file => config.trace_to_file = try readKeyBool(&scanner),
+                .users => config.users = try parseUsers(gpa, &scanner, stderr),
             }
         }
 
-        // verify all fields were present
-        inline for (@typeInfo(Field).@"enum".fields) |f| {
-            if (!@field(have, f.name)) {
-                try stderr.print("missing field: '{s}'\n", .{f.name});
+        if (have.count() != num_fields) {
+            inline for (@typeInfo(Field).@"enum".fields) |f| {
+                if (!have.isSet(f.value)) try stderr.print("missing field: '{s}'\n", .{f.name});
             }
+            return error.MissingField;
         }
         return config;
     }
@@ -259,9 +219,6 @@ pub const SimConfig = struct {
         try writer.writeAll("+--------------------------+\n");
         try writer.print("| SIMULATION CONFIGURATION |\n", .{});
         try writer.writeAll("+--------------------------+\n");
-
-        try writer.writeAll("--- Warm up ---\n");
-        try writer.print("{s: <24}:  {f}\n", .{ "Time between post creation", self.warmup_post_inter_creation });
 
         try writer.writeAll("--- User Actions Config ---\n");
         try writer.print("{s: <24}:  {f}\n", .{ "User policy", self.user_policy });
