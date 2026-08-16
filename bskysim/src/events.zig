@@ -58,19 +58,6 @@ pub fn eventSessionEnd(rng: Random, users: *const std.MultiArrayList(User), t_cl
     return event_end;
 }
 
-pub fn eventCreateWarmup(rng: Random, simconf: *const SimConfig, user_id: u32, generated_events: u64) Event {
-    const t_creation_decision = simconf.warmup_post_inter_creation.sample(rng);
-
-    const creation_delay = simconf.creation_delay.sample(rng);
-    return Event{
-        .time = t_creation_decision + creation_delay,
-        .type = .{ .create = {} },
-        .user_id = user_id,
-        .id = generated_events,
-        .session_gen = 0,
-    };
-}
-
 pub fn eventCreateFirstPost(rng: Random, simconf: *const SimConfig, users: *const std.MultiArrayList(User), t_clock: f64, user_id: u32, session_id: u32, generated_events: u64) Event {
     // Schedule the next post creation for this user
     const creation_delay = simconf.creation_delay.sample(rng);

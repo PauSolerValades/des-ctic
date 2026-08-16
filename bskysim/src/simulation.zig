@@ -107,9 +107,10 @@ fn stageOne(
     // We create an event per user to kickstart the user posts.
     state.user_seen_post.ensureItemCapacity(arena, state.users.len) catch return error.OutOfMemoryPagedBitSet;
     state.user_interact_post.ensureItemCapacity(arena, state.users.len) catch return error.OutOfMemoryPagedBitSet;
+
     for (0..state.users.len) |uid| {
         // we create a creation event
-        const create_post = gen.eventCreateWarmup(rng, simconf, @intCast(uid), metrics.generated_events);
+        const create_post = gen.eventCreateFirstPost(rng, simconf, @intCast(uid), metrics.generated_events);
         queue.push(gpa, create_post) catch return error.OutOfMemoryQueue;
         metrics.generated_events += 1;
     }
@@ -128,6 +129,7 @@ fn stageOne(
                 state.posts.append(arena, .{ .id = new_post_id, .author = current_uid }) catch return error.OutOfMemorySMAList;
                 state.user_seen_post.ensureItemCapacity(arena, new_post_id) catch return error.OutOfMemoryPagedBitSet;
                 state.user_interact_post.ensureItemCapacity(arena, new_post_id) catch return error.OutOfMemoryPagedBitSet;
+
                 // creator has seen and implicitly interacted with their own post
                 state.user_seen_post.set(current_uid, new_post_id);
                 state.user_interact_post.set(current_uid, new_post_id);
