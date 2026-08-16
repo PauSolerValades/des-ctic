@@ -6,14 +6,14 @@ const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 
 const stats = @import("distributions");
-const ContDist = stats.NonNegativeContinuousDistribution;
-const CDist = stats.ContinuousDistribution;
+const NNContDist = stats.NonNegativeContinuousDistribution;
+const ContDist = stats.ContinuousDistribution;
 const DiscDist = stats.DiscreteDistribution;
 
 const Precision = @import("../SimConfig.zig").Precision;
-const DataType = @import("../SimConfig.zig").DataType;
 const UserConf = @import("../SimConfig.zig").UserConf;
-const DistTag = std.meta.Tag(ContDist(f32));
+const DistTag = std.meta.Tag(NNContDist(f32));
+const Action = @import("../entities.zig").Action;
 
 const pcdist = @import("cont-parsers.zig");
 const pddist = @import("disc-parsers.zig");
@@ -34,7 +34,34 @@ pub const JsonScannerError = error{
     OutOfMemory,
 };
 
-pub fn parseNonNegativeContinuousDist(scanner: *Scanner, stderr: *Io.Writer, param_name: []const u8) (ParseError || JsonScannerError || error{ InvalidCharacter, WriteFailed })!ContDist(Precision) {
+pub fn parseNonNegativeContinuousDist(scanner: *Scanner, stderr: *Io.Writer, param_name: []const u8) (ParseError || JsonScannerError || error{ InvalidCharacter, WriteFailed })!NNContDist(Precision) {
+    if (try scanner.next() != Token.object_begin) return error.UnexpectedToken;
+
+    const name_tok = try scanner.next();
+    if (name_tok != Token.string) return error.UnexpectedToken;
+
+    const Tag = std.meta.Tag(NNContDist(Precision));
+    const tag = std.meta.stringToEnum(Tag, name_tok.string) orelse {
+        try stderr.print("unknown continuous distribution: '{s}'\n", .{name_tok.string});
+        return error.UnknownDistribution;
+    };
+
+    const dist = switch (tag) {
+        .exponential => try pcdist.parseExponential(NNContDist(Precision), scanner, stderr),
+        .pareto => try pcdist.parsePareto(NNContDist(Precision), scanner, stderr),
+        .uniform => try pcdist.parseUniform(NNContDist(Precision), scanner, param_name, stderr),
+        .constant => try pcdist.parseConstant(NNContDist(Precision), scanner, param_name, stderr),
+        .lognormal => try pcdist.parseLognormal(NNContDist(Precision), scanner, stderr),
+        .weibull => try pcdist.parseWeibull(NNContDist(Precision), scanner, stderr),
+        .gamma => try pcdist.parseGamma(NNContDist(Precision), scanner, stderr),
+        .gpareto => try pcdist.parseGeneralizedPareto(NNContDist(Precision), scanner, stderr),
+    };
+
+    if (try scanner.next() != Token.object_end) return error.UnexpectedToken;
+    return dist;
+}
+
+pub fn parseContinuousDist(scanner: *Scanner, stderr: *Io.Writer, param_name: []const u8) (ParseError || JsonScannerError || error{ InvalidCharacter, WriteFailed })!ContDist(Precision) {
     if (try scanner.next() != Token.object_begin) return error.UnexpectedToken;
 
     const name_tok = try scanner.next();
@@ -47,39 +74,12 @@ pub fn parseNonNegativeContinuousDist(scanner: *Scanner, stderr: *Io.Writer, par
     };
 
     const dist = switch (tag) {
-        .exponential => try pcdist.parseExponential(ContDist(Precision), scanner, stderr),
-        .pareto => try pcdist.parsePareto(ContDist(Precision), scanner, stderr),
-        .uniform => try pcdist.parseUniform(ContDist(Precision), scanner, param_name, stderr),
-        .constant => try pcdist.parseConstant(ContDist(Precision), scanner, param_name, stderr),
-        .lognormal => try pcdist.parseLognormal(ContDist(Precision), scanner, stderr),
-        .weibull => try pcdist.parseWeibull(ContDist(Precision), scanner, stderr),
-        .gamma => try pcdist.parseGamma(ContDist(Precision), scanner, stderr),
-        .gpareto => try pcdist.parseGeneralizedPareto(ContDist(Precision), scanner, stderr),
-    };
-
-    if (try scanner.next() != Token.object_end) return error.UnexpectedToken;
-    return dist;
-}
-
-pub fn parseContinuousDist(scanner: *Scanner, stderr: *Io.Writer, param_name: []const u8) (ParseError || JsonScannerError || error{ InvalidCharacter, WriteFailed })!CDist(Precision) {
-    if (try scanner.next() != Token.object_begin) return error.UnexpectedToken;
-
-    const name_tok = try scanner.next();
-    if (name_tok != Token.string) return error.UnexpectedToken;
-
-    const Tag = std.meta.Tag(CDist(Precision));
-    const tag = std.meta.stringToEnum(Tag, name_tok.string) orelse {
-        try stderr.print("unknown continuous distribution: '{s}'\n", .{name_tok.string});
-        return error.UnknownDistribution;
-    };
-
-    const dist = switch (tag) {
-        .exponential => try pcdist.parseExponential(CDist, scanner, stderr),
-        .pareto => try pcdist.parsePareto(CDist, scanner, stderr),
-        .uniform => try pcdist.parseUniform(CDist, scanner, param_name, stderr),
-        .constant => try pcdist.parseConstant(CDist, scanner, param_name, stderr),
+        .exponential => try pcdist.parseExponential(ContDist, scanner, stderr),
+        .pareto => try pcdist.parsePareto(ContDist, scanner, stderr),
+        .uniform => try pcdist.parseUniform(ContDist, scanner, param_name, stderr),
+        .constant => try pcdist.parseConstant(ContDist, scanner, param_name, stderr),
         .normal => dist: {
-            const d = try pcdist.parseNormal(CDist, scanner, stderr);
+            const d = try pcdist.parseNormal(ContDist, scanner, stderr);
             try stderr.print("parameter '{s}' could be negative, as 'normal' is not strictly positive\n", .{param_name});
             break :dist d;
         },
@@ -89,29 +89,30 @@ pub fn parseContinuousDist(scanner: *Scanner, stderr: *Io.Writer, param_name: []
     return dist;
 }
 
+// This distribution is not used. and if it were, we would need the typed to be inferred. This is action as life is tought
 // this is very very cool but i am not interested on this. It MUST be a categorical, therefore we can directly call
 // parse categorical
-pub fn parseDiscreteDist(gpa: Allocator, scanner: *Scanner, stderr: *Io.Writer) (ParseError || JsonScannerError || error{WriteFailed})!DiscDist(Precision, DataType) {
-    if (try scanner.next() != Token.object_begin) return error.UnexpectedToken;
+// pub fn parseDiscreteDist(gpa: Allocator, scanner: *Scanner, stderr: *Io.Writer) (ParseError || JsonScannerError || error{WriteFailed})!DiscDist(Precision, usize) {
+//     if (try scanner.next() != Token.object_begin) return error.UnexpectedToken;
 
-    const name_tok = try scanner.next();
-    if (name_tok != Token.string) return error.UnexpectedToken;
+//     const name_tok = try scanner.next();
+//     if (name_tok != Token.string) return error.UnexpectedToken;
 
-    const Tag = std.meta.Tag(DiscDist(Precision, DataType));
-    const tag = std.meta.stringToEnum(Tag, name_tok.string) orelse {
-        try stderr.print("unknown discrete distribution: '{s}'\n", .{name_tok.string});
-        return error.UnknownDistribution;
-    };
+//     const Tag = std.meta.Tag(DiscDist(Precision, usize));
+//     const tag = std.meta.stringToEnum(Tag, name_tok.string) orelse {
+//         try stderr.print("unknown discrete distribution: '{s}'\n", .{name_tok.string});
+//         return error.UnknownDistribution;
+//     };
 
-    const dist = switch (tag) {
-        .categorical => try pddist.parseCategorical(gpa, scanner, stderr),
-        .constant => return error.UnknownDistribution,
-        .ecdf => return error.UnknownDistribution,
-    };
+//     const dist = switch (tag) {
+//         .categorical => try pddist.parseCategorical(gpa, scanner, stderr),
+//         .constant => return error.UnknownDistribution,
+//         .ecdf => return error.UnknownDistribution,
+//     };
 
-    if (try scanner.next() != Token.object_end) return error.UnexpectedToken;
-    return dist;
-}
+//     if (try scanner.next() != Token.object_end) return error.UnexpectedToken;
+//     return dist;
+// }
 
 pub fn readKeyNumber(scanner: *Scanner, comptime T: type) (JsonScannerError || error{InvalidCharacter})!T {
     const tok = try scanner.next();
@@ -134,7 +135,6 @@ pub fn readKeyString(gpa: Allocator, scanner: *Scanner) (JsonScannerError || All
     return try gpa.dupe(u8, tok.string);
 }
 
-const Action = @import("../entities.zig").Action;
 pub fn parseUserPolicyCategorical(gpa: std.mem.Allocator, scanner: *Scanner, stderr: *Io.Writer) (ParseError || JsonScannerError || error{ InvalidCharacter, WriteFailed })!stats.Categorical(Precision, Action) {
     if (try scanner.next() != Token.object_begin) return error.UnexpectedToken;
     var weights: std.ArrayList(Precision) = .empty;

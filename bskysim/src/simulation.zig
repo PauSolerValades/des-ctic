@@ -10,9 +10,9 @@ const DaryHeap = @import("ds").DaryHeap;
 
 const dist = @import("distributions");
 
-const SimConfig = @import("SimConfig.zig").SimConfig;
+const SimConfig = @import("SimConfig.zig");
 const Precision = @import("SimConfig.zig").Precision;
-const SimResults = @import("SimResult.zig").SimResults;
+const SimResults = @import("SimResult.zig");
 const entities = @import("entities.zig");
 const t = @import("traces.zig");
 const topo = @import("Topology.zig");

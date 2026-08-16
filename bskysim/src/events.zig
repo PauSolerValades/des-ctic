@@ -3,8 +3,8 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const Random = std.Random;
 
-const SimConfig = @import("SimConfig.zig").SimConfig;
-const SimResults = @import("SimResult.zig").SimResults;
+const SimConfig = @import("SimConfig.zig");
+const SimResults = @import("SimResult.zig");
 const entities = @import("entities.zig");
 
 const Event = entities.Event;

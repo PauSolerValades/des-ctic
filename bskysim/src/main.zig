@@ -4,7 +4,7 @@ const Io = std.Io;
 
 const argz = @import("eazy_args");
 
-const SimConfig = @import("SimConfig.zig").SimConfig;
+const SimConfig = @import("SimConfig.zig");
 const simulation = @import("simulation.zig");
 const loader = @import("load-topology.zig");
 const entities = @import("entities.zig");
