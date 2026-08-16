@@ -4,15 +4,13 @@ const Io = std.Io;
 
 const argz = @import("eazy_args");
 
-const structs = @import("config.zig");
+const SimConfig = @import("SimConfig.zig").SimConfig;
 const simulation = @import("simulation.zig");
 const loader = @import("load-topology.zig");
 const entities = @import("entities.zig");
 const topo = @import("Topology.zig");
 const SimState = @import("SimState.zig");
 const traces = @import("traces.zig");
-
-const SimConfig = structs.SimConfig;
 
 const Topology = topo;
 // const SimState = topo.SimState; // UNCOMMENT LATER

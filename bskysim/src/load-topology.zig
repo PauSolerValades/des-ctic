@@ -11,7 +11,7 @@ const DiscDist = dist.DiscreteDistribution;
 
 const Categorical = dist.Categorical;
 
-const structs = @import("config.zig");
+const structs = @import("SimConfig.zig");
 const entities = @import("entities.zig");
 const Precision = structs.Precision;
 

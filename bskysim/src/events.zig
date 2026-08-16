@@ -3,11 +3,9 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const Random = std.Random;
 
-const config = @import("config.zig");
+const SimConfig = @import("SimConfig.zig").SimConfig;
+const SimResults = @import("SimResult.zig").SimResults;
 const entities = @import("entities.zig");
-
-const SimResults = config.SimResults;
-const SimConfig = config.SimConfig;
 
 const Event = entities.Event;
 const Action = entities.Action;

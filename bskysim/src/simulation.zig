@@ -10,7 +10,9 @@ const DaryHeap = @import("ds").DaryHeap;
 
 const dist = @import("distributions");
 
-const config = @import("config.zig");
+const SimConfig = @import("SimConfig.zig").SimConfig;
+const Precision = @import("SimConfig.zig").Precision;
+const SimResults = @import("SimResult.zig").SimResults;
 const entities = @import("entities.zig");
 const t = @import("traces.zig");
 const topo = @import("Topology.zig");
@@ -23,10 +25,6 @@ const ds_pkg = @import("ds");
 const SMAList = ds_pkg.SegmentedMultiArrayList;
 const PagedBitSet = ds_pkg.PagedBitSet;
 
-const SimResults = config.SimResults;
-const SimConfig = config.SimConfig;
-
-const Precision = config.Precision;
 
 const Event = entities.Event;
 const Action = entities.Action;

@@ -6,7 +6,7 @@ const Token = std.json.Token;
 const stats = @import("distributions");
 const Interval = stats.Interval;
 
-const Precision = @import("../config.zig").Precision;
+const Precision = @import("../SimConfig.zig").Precision;
 
 const ParseError = @import("parse.zig").ParseError;
 const JsonScannerError = @import("parse.zig").JsonScannerError;
@@ -143,7 +143,7 @@ pub fn parseNormal(comptime Dist: type, scanner: *Scanner, stderr: *Io.Writer) (
     if (try scanner.next() != Token.object_begin) return error.UnexpectedToken;
 
     var mean: ?Precision = null;
-    var variance: ?Precision = null;
+    var sd: ?Precision = null;
 
     while (true) {
         const tok = try scanner.next();
@@ -153,26 +153,26 @@ pub fn parseNormal(comptime Dist: type, scanner: *Scanner, stderr: *Io.Writer) (
         const num = try readKeyNumber(scanner, Precision);
         if (std.mem.eql(u8, tok.string, "mean")) {
             mean = num;
-        } else if (std.mem.eql(u8, tok.string, "variance")) {
-            variance = num;
+        } else if (std.mem.eql(u8, tok.string, "sd")) {
+            sd = num;
         } else {
             try stderr.print("normal: unknown param '{s}'\n", .{tok.string});
             return error.UnknownParameter;
         }
     }
 
-    if (mean == null or variance == null) {
-        try stderr.print("normal: missing required param (need 'mean' and 'variance')\n", .{});
+    if (mean == null or sd == null) {
+        try stderr.print("normal: missing required param (need 'mean' and 'sd')\n", .{});
         return error.MissingField;
     }
-    return Dist{ .normal = stats.Normal(Precision).init(mean.?, variance.?) };
+    return Dist{ .normal = stats.Normal(Precision).init(mean.?, sd.?) };
 }
 
 pub fn parseLognormal(comptime Dist: type, scanner: *Scanner, stderr: *Io.Writer) (ParseError || JsonScannerError || error{ InvalidCharacter, WriteFailed })!Dist {
     if (try scanner.next() != Token.object_begin) return error.UnexpectedToken;
 
-    var mean: ?Precision = null;
-    var variance: ?Precision = null;
+    var meanlog: ?Precision = null;
+    var sdlog: ?Precision = null;
 
     while (true) {
         const tok = try scanner.next();
@@ -180,21 +180,21 @@ pub fn parseLognormal(comptime Dist: type, scanner: *Scanner, stderr: *Io.Writer
         if (tok != Token.string) return error.UnexpectedToken;
 
         const num = try readKeyNumber(scanner, Precision);
-        if (std.mem.eql(u8, tok.string, "mean")) {
-            mean = num;
-        } else if (std.mem.eql(u8, tok.string, "variance")) {
-            variance = num;
+        if (std.mem.eql(u8, tok.string, "meanlog")) {
+            meanlog = num;
+        } else if (std.mem.eql(u8, tok.string, "sdlog")) {
+            sdlog = num;
         } else {
             try stderr.print("lognormal: unknown param '{s}'\n", .{tok.string});
             return error.UnknownParameter;
         }
     }
 
-    if (mean == null or variance == null) {
-        try stderr.print("lognormal: missing required param (need 'mean' and 'variance')\n", .{});
+    if (meanlog == null or sdlog == null) {
+        try stderr.print("lognormal: missing required param (need 'meanlog' and 'sdlog')\n", .{});
         return error.MissingField;
     }
-    return Dist{ .lognormal = stats.Lognormal(Precision).init(mean.?, variance.?) };
+    return Dist{ .lognormal = stats.Lognormal(Precision).init(meanlog.?, sdlog.?) };
 }
 
 pub fn parseWeibull(comptime Dist: type, scanner: *Scanner, stderr: *Io.Writer) (ParseError || JsonScannerError || error{ InvalidCharacter, WriteFailed })!Dist {
@@ -223,14 +223,14 @@ pub fn parseWeibull(comptime Dist: type, scanner: *Scanner, stderr: *Io.Writer) 
         try stderr.print("weibull: missing required param (need 'scale' and 'shape')\n", .{});
         return error.MissingField;
     }
-    return Dist{ .weibull = stats.Weibull(Precision).init(scale.?, shape.?) };
+    return Dist{ .weibull = stats.Weibull(Precision).init(shape.?, scale.?) };
 }
 
 pub fn parseGamma(comptime Dist: type, scanner: *Scanner, stderr: *Io.Writer) (ParseError || JsonScannerError || error{ InvalidCharacter, WriteFailed })!Dist {
     if (try scanner.next() != Token.object_begin) return error.UnexpectedToken;
 
     var shape: ?Precision = null;
-    var scale: ?Precision = null;
+    var rate: ?Precision = null;
 
     while (true) {
         const tok = try scanner.next();
@@ -240,19 +240,19 @@ pub fn parseGamma(comptime Dist: type, scanner: *Scanner, stderr: *Io.Writer) (P
         const num = try readKeyNumber(scanner, Precision);
         if (std.mem.eql(u8, tok.string, "shape")) {
             shape = num;
-        } else if (std.mem.eql(u8, tok.string, "scale")) {
-            scale = num;
+        } else if (std.mem.eql(u8, tok.string, "rate")) {
+            rate = num;
         } else {
             try stderr.print("gamma: unknown param '{s}'\n", .{tok.string});
             return error.UnknownParameter;
         }
     }
 
-    if (shape == null or scale == null) {
-        try stderr.print("gamma: missing required param (need 'shape' and 'scale')\n", .{});
+    if (shape == null or rate == null) {
+        try stderr.print("gamma: missing required param (need 'shape' and 'rate')\n", .{});
         return error.MissingField;
     }
-    return Dist{ .gamma = stats.Gamma(Precision).init(shape.?, scale.?) };
+    return Dist{ .gamma = stats.Gamma(Precision).init(shape.?, rate.?) };
 }
 
 pub fn parseGeneralizedPareto(comptime Dist: type, scanner: *Scanner, stderr: *Io.Writer) (ParseError || JsonScannerError || error{ InvalidCharacter, WriteFailed })!Dist {

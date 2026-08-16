@@ -9,7 +9,7 @@ const stats = @import("distributions");
 const ECDF = stats.ECDF;
 const NNContDist = stats.NonNegativeContinuousDistribution;
 
-const config = @import("config.zig");
+const config = @import("SimConfig.zig");
 
 const ds = @import("ds");
 

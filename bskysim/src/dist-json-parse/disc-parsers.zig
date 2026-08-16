@@ -7,7 +7,7 @@ const ContDist = stats.ContinuousDistribution;
 const DiscDist = stats.DiscreteDistribution;
 const Interval = stats.Interval;
 
-const Precision = @import("../config.zig").Precision;
+const Precision = @import("../SimConfig.zig").Precision;
 
 const Action = @import("../entities.zig").Action;
 

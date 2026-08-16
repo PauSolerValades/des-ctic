@@ -10,7 +10,7 @@
   "user_inter_action": {
     "normal": {
       "mean": 3,
-      "variance": 1
+      "sd": 1
     }
   },
   "propagation_delay": {

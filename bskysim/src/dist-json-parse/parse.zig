@@ -3,14 +3,17 @@ const Io = std.Io;
 const Scanner = std.json.Scanner;
 const Token = std.json.Token;
 const Allocator = std.mem.Allocator;
+const ArrayList = std.ArrayList;
 
 const stats = @import("distributions");
 const ContDist = stats.NonNegativeContinuousDistribution;
 const CDist = stats.ContinuousDistribution;
 const DiscDist = stats.DiscreteDistribution;
 
-const Precision = @import("../config.zig").Precision;
-const DataType = @import("../config.zig").DataType;
+const Precision = @import("../SimConfig.zig").Precision;
+const DataType = @import("../SimConfig.zig").DataType;
+const UserConf = @import("../SimConfig.zig").UserConf;
+const DistTag = std.meta.Tag(ContDist(f32));
 
 const pcdist = @import("cont-parsers.zig");
 const pddist = @import("disc-parsers.zig");
@@ -189,7 +192,16 @@ pub fn parseUserPolicyCategorical(gpa: std.mem.Allocator, scanner: *Scanner, std
     return try stats.Categorical(Precision, Action).init(gpa, weights_dup, data_dup);
 }
 
-fn parseUsers(gpa: Allocator, scanner: *Scanner, stderr: *Io.Writer) (ParseError || JsonScannerError || error{ InvalidCharacter, WriteFailed })![]UserConf {
+fn readDistTag(scanner: *Scanner, stderr: *Io.Writer) (ParseError || JsonScannerError || error{WriteFailed})!DistTag {
+    const tok = try scanner.next();
+    if (tok != Token.string) return error.UnexpectedToken;
+    return std.meta.stringToEnum(DistTag, tok.string) orelse {
+        try stderr.print("users: unknown distribution tag '{s}'\n", .{tok.string});
+        return error.UnknownDistribution;
+    };
+}
+
+pub fn parseUsers(gpa: Allocator, scanner: *Scanner, stderr: *Io.Writer) (ParseError || JsonScannerError || error{ InvalidCharacter, WriteFailed })![]UserConf {
     if (try scanner.next() != Token.array_begin) return error.UnexpectedToken;
 
     var users: ArrayList(UserConf) = .empty;
