@@ -163,7 +163,7 @@ pub fn delete(self: *const @This(), gpa: Allocator) void {
 pub fn isValid(self: *const @This(), io: Io, stderr: *Io.Writer) (error{OutOfMemory} || ConfigError || error{WriteFailed})!void {
     if (self.horizon <= 0) return error.NegativeHorizon;
     if (self.duration <= 0) return error.NegativeDuration;
-    if (self.warmup_time <= 0) return error.NegativeWarmup;
+    if (self.warmup_time < 0) return error.NegativeWarmup;
 
     if (self.warmup_time + self.duration > self.horizon) return error.DurationBiggerThenHorizon;
 
