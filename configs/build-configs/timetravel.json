@@ -1,0 +1,11 @@
+{
+  "simulation": {
+    "workers": 4,
+    "runs": 1000,
+    "output_dir": "traces/timetravel-with-fix/",
+    "data_file": "bskysim/data/10K_monotonous.bin",
+    "config_file": "configs/simconfs/prod.json"
+  },
+  "cascade": null,
+  "dataset": null
+}

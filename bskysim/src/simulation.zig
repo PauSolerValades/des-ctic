@@ -364,9 +364,9 @@ pub fn simulate(
                     // through the global event queue for each skipped post.
                     var post: ?TimelineEvent = null;
                     while (user_timeline.items.len > 0) {
-                        // this is not null due to the len being > 0
-                        post = user_timeline.pop();
-                        if (!state.user_interact_post.isSet(current_uid, post.?.post_id)) {
+                        const candidate = user_timeline.pop();
+                        if (!state.user_interact_post.isSet(current_uid, candidate.post_id)) {
+                            post = candidate;
                             break;
                         }
                     }
