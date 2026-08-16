@@ -1,0 +1,14 @@
+.{
+    .name = .des_ctic,
+    .version = "0.0.1",
+    .fingerprint = 0xc5174d7257ad69ad, // Changing this has security and trust implications.
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .bskysim = .{ .path = "bskysim" },
+        .cascade = .{ .path = "cascade" },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+    },
+}
