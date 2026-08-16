@@ -1,8 +1,6 @@
 const std = @import("std");
 const Build = std.Build;
 
-const Io = std.Io;
-
 const SimulationConfig = struct {
     workers: ?u32,
     runs: ?u32,
@@ -32,203 +30,112 @@ const JobConfig = struct {
     dataset: ?*DatasetConfig,
 };
 
-const Recompile = enum { simulation, cascades, datasets, pipeline, all };
+pub fn build(b: *Build) !void {
+    // declare all the steps
+    const sim_step = b.step("sim", "Run the simulation");
+    const cascades_step = b.step("cascades", "Run cascade construction");
+    const datasets_step = b.step("datasets", "Run dataset creation");
+    const pipeline_step = b.step("pipeline", "Run cascades + datasets from existing traces");
+    const all_step = b.step("all", "Run simulation, cascades, and datasets");
+    const steps: []const *Build.Step = &.{ sim_step, cascades_step, datasets_step, pipeline_step, all_step };
 
-pub fn build(b: *Build) void {
-    var threaded: Io.Threaded = .init(b.allocator, .{});
-    defer threaded.deinit();
-    const io = threaded.io();
+    // Make all the binaries compile if necessary
+    const sim_exe = b.dependency("bskysim", .{ .optimize = .ReleaseFast }).artifact("bskysim");
+    const cascades_exe = b.dependency("cascade", .{ .optimize = .ReleaseFast }).artifact("construct-cascade");
+    b.installArtifact(sim_exe);
+    b.installArtifact(cascades_exe);
 
-    var bufferr: [1024]u8 = undefined;
-    var stderr_writer = Io.File.stderr().writer(io, &bufferr);
-    const stderr = &stderr_writer.interface;
+    // The go binary must be compiled manually
+    const go_build = b.addSystemCommand(&.{ "go", "build", "-o", "../bin/dataset-creation", "." });
+    go_build.setCwd(.{ .cwd_relative = "dataset" });
+    b.getInstallStep().dependOn(&go_build.step);
 
-    const config_path = b.option([]const u8, "config", "Path to the configuration for this Job") orelse {
-        b.default_step = b.step("noop", "no-op: pass -Dconfig=... to run anything");
+    const config_path = b.option([]const u8, "config", "Path to the configuration for this job") orelse {
+        failAll(b, "pass -Dconfig=<file>.json to run anything", steps);
         return;
     };
-    const recompile = b.option(Recompile, "compile", "Which parts of the pipeline to rebuild and move to the bin folder");
 
-    const config_contents = Io.Dir.cwd().readFileAlloc(io, config_path, b.allocator, .unlimited) catch |err| {
-        switch (err) {
-            error.FileNotFound => stderr.print("Config file {s} is not found.\n", .{config_path}) catch @panic("stderr not created"),
-            error.IsDir => stderr.print("{s} is a directory.\n", .{config_path}) catch @panic("stderr not created"),
-            else => stderr.print("Unexpected error: {}", .{err}) catch @panic("stderr not created"),
-        }
-        @panic("Error opening the Job configuration file");
+    const config_contents = std.Io.Dir.cwd().readFileAlloc(b.graph.io, config_path, b.allocator, .unlimited) catch {
+        failAll(b, b.fmt("cannot read config file: {s}", .{config_path}), steps);
+        return;
     };
 
     const parsed = std.json.parseFromSlice(JobConfig, b.allocator, config_contents, .{}) catch |err| {
-        std.debug.print("Failed to parse JSON config: {}\n", .{err});
+        failAll(b, b.fmt("invalid JSON in config file {s}: {}", .{ config_path, err }), steps);
         return;
     };
-    defer parsed.deinit();
     const config = parsed.value;
 
-    const sim_step = buildSimulation(b, &config);
-    const cascade_step = buildCascades(b, &config, sim_step);
-    const dataset_step = buildDatasets(b, &config, cascade_step orelse sim_step);
+    const sim_argv = if (config.simulation) |c| try simulationArgs(b, c) else null;
+    const cascades_argv = if (config.cascade) |c| try cascadesArgs(b, c) else null;
+    const datasets_argv = if (config.dataset) |c| try datasetsArgs(b, c) else null;
 
-    if (recompile) |c| {
-        switch (c) {
-            .simulation => sim_step.dependOn(compileSimulation(b)),
-            .cascades => (cascade_step orelse sim_step).dependOn(compileCascades(b)),
-            .datasets => {
-                const dep: *Build.Step = dataset_step orelse cascade_step orelse sim_step;
-                dep.dependOn(compileDatasets(b));
-            },
-            .pipeline => {
-                (cascade_step orelse sim_step).dependOn(compileCascades(b));
-                const dep: *Build.Step = dataset_step orelse cascade_step orelse sim_step;
-                dep.dependOn(compileDatasets(b));
-            },
-            .all => {
-                sim_step.dependOn(compileSimulation(b));
-                (cascade_step orelse sim_step).dependOn(compileCascades(b));
-                const dep: *Build.Step = dataset_step orelse cascade_step orelse sim_step;
-                dep.dependOn(compileDatasets(b));
-            },
-        }
-    }
+    sim_step.dependOn(zigStage(b, sim_exe, sim_argv, "simulation"));
+    cascades_step.dependOn(zigStage(b, cascades_exe, cascades_argv, "cascade"));
+    datasets_step.dependOn(goStage(b, datasets_argv, &go_build.step, "dataset"));
 
-    const all_step = b.step("all", "Run simulation, cascade construction, and dataset creation");
-    all_step.dependOn(sim_step);
-    if (cascade_step) |cs| all_step.dependOn(cs);
-    if (dataset_step) |ds| all_step.dependOn(ds);
+    // Pipeline: cascades feeds datasets, so they must be ordered.
+    const p_cascades = zigStage(b, cascades_exe, cascades_argv, "cascade");
+    const p_datasets = goStage(b, datasets_argv, &go_build.step, "dataset");
+    p_datasets.dependOn(p_cascades);
+    pipeline_step.dependOn(p_datasets);
+
+    // All: full chain, ordered.
+    const a_sim = zigStage(b, sim_exe, sim_argv, "simulation");
+    const a_cascades = zigStage(b, cascades_exe, cascades_argv, "cascade");
+    a_cascades.dependOn(a_sim);
+    const a_datasets = goStage(b, datasets_argv, &go_build.step, "dataset");
+    a_datasets.dependOn(a_cascades);
+    all_step.dependOn(a_datasets);
 }
 
-fn buildSimulation(b: *Build, config: *const JobConfig) *Build.Step {
-    var arg_list: std.ArrayList([]const u8) = .empty;
-    defer arg_list.deinit(b.allocator);
-
-    const sim_config = config.simulation orelse @panic("Simulation is null on the json wtf");
-
-    var w_buf: [16]u8 = undefined;
-    var n_buf: [16]u8 = undefined;
-    simulationArguments(b.allocator, &arg_list, sim_config, &w_buf, &n_buf) catch |err| {
-        switch (err) {
-            error.NoSpaceLeft => @panic("buffer too small for -w/-n argument"),
-            error.OutOfMemory => @panic("OOM building simulation arguments"),
-        }
-    };
-    const run_sim = b.addSystemCommand(arg_list.items);
-    return &run_sim.step;
-}
-
-fn buildCascades(b: *Build, config: *const JobConfig, dep: *Build.Step) ?*Build.Step {
-    var arg_list: std.ArrayList([]const u8) = .empty;
-    defer arg_list.deinit(b.allocator);
-
-    const cascade_config = config.cascade orelse return null;
-
-    var b_buf: [16]u8 = undefined;
-    cascadeArguments(b.allocator, &arg_list, cascade_config, &b_buf) catch |err| {
-        switch (err) {
-            error.NoSpaceLeft => @panic("buffer too small for -b argument"),
-            error.OutOfMemory => @panic("OOM building cascade arguments"),
-        }
-    };
-    const run_cascades = b.addSystemCommand(arg_list.items);
-    run_cascades.step.dependOn(dep);
-    return &run_cascades.step;
-}
-
-fn buildDatasets(b: *Build, config: *const JobConfig, dep: *Build.Step) ?*Build.Step {
-    var arg_list: std.ArrayList([]const u8) = .empty;
-    defer arg_list.deinit(b.allocator);
-
-    const dataset_config = config.dataset orelse return null;
-
-    datasetsArguments(b.allocator, &arg_list, dataset_config) catch |err| {
-        switch (err) {
-            error.OutOfMemory => @panic("OOM building dataset arguments"),
-        }
-    };
-    const run_datasets = b.addSystemCommand(arg_list.items);
-    run_datasets.step.dependOn(dep);
-    return &run_datasets.step;
-}
-
-fn compileSimulation(b: *Build) *Build.Step {
-    const cmd = b.addSystemCommand(&[_][]const u8{ "zig", "build", "-Doptimize=ReleaseFast", "-p", "../" });
-    cmd.setCwd(.{ .cwd_relative = "bskysim" });
+/// Check if the proper json config is null. if it is we add fail gracefuly, if not executed
+fn zigStage(b: *Build, exe: *Build.Step.Compile, argv: ?[]const []const u8, section: []const u8) *Build.Step {
+    const a = argv orelse return &b.addFail(b.fmt("config is missing the '{s}' section", .{section})).step;
+    const cmd = b.addRunArtifact(exe);
+    cmd.addArgs(a);
+    cmd.has_side_effects = true;
     return &cmd.step;
 }
 
-fn compileCascades(b: *Build) *Build.Step {
-    const cmd = b.addSystemCommand(&[_][]const u8{ "zig", "build", "-Doptimize=ReleaseFast", "-p", "../" });
-    cmd.setCwd(.{ .cwd_relative = "construct-cascades" });
+/// Same, for the go binary; zig can't see inside `go build`, so the edge is manual.
+fn goStage(b: *Build, argv: ?[]const []const u8, go_build: *Build.Step, section: []const u8) *Build.Step {
+    const a = argv orelse return &b.addFail(b.fmt("config is missing the '{s}' section", .{section})).step;
+    const cmd = b.addSystemCommand(a);
+    cmd.has_side_effects = true;
+    cmd.step.dependOn(go_build);
     return &cmd.step;
 }
 
-fn compileDatasets(b: *Build) *Build.Step {
-    const cmd = b.addSystemCommand(&[_][]const u8{ "go", "build", "-o", "../bin/dataset-creation", "." });
-    cmd.setCwd(.{ .cwd_relative = "dataset-creation" });
-    return &cmd.step;
+fn failAll(b: *Build, msg: []const u8, steps: []const *Build.Step) void {
+    const fail = b.addFail(msg);
+    for (steps) |s| s.dependOn(&fail.step);
 }
 
-fn simulationArguments(
-    gpa: std.mem.Allocator,
-    arg_list: *std.ArrayList([]const u8),
-    config: *const SimulationConfig,
-    w_buf: []u8,
-    n_buf: []u8,
-) !void {
-    try arg_list.append(gpa, "./bin/bskysim");
+// Create arguments functions
 
-    if (config.workers) |w| {
-        try arg_list.append(gpa, try std.fmt.bufPrint(w_buf, "-w{}", .{w}));
-    }
-    if (config.runs) |n| {
-        try arg_list.append(gpa, try std.fmt.bufPrint(n_buf, "-n{}", .{n}));
-    }
-
-    if (config.output_dir) |output_dir| {
-        try arg_list.append(gpa, "--outputdir");
-        try arg_list.append(gpa, output_dir);
-    }
-
-    try arg_list.append(gpa, config.data_file);
-    try arg_list.append(gpa, config.config_file);
+fn simulationArgs(b: *Build, c: *const SimulationConfig) ![]const []const u8 {
+    var args: std.ArrayList([]const u8) = .empty;
+    if (c.workers) |w| try args.append(b.allocator, b.fmt("-w{d}", .{w}));
+    if (c.runs) |n| try args.append(b.allocator, b.fmt("-n{d}", .{n}));
+    if (c.output_dir) |o| try args.appendSlice(b.allocator, &.{ "--outputdir", o });
+    try args.appendSlice(b.allocator, &.{ c.data_file, c.config_file });
+    return args.items;
 }
 
-fn cascadeArguments(
-    gpa: std.mem.Allocator,
-    arg_list: *std.ArrayList([]const u8),
-    config: *const CascadesConfig,
-    b_buf: []u8,
-) !void {
-    try arg_list.append(gpa, "./bin/construct-cascade");
-
-    if (config.buckets) |b| {
-        try arg_list.append(gpa, try std.fmt.bufPrint(b_buf, "-b{}", .{b}));
-    }
-    if (config.bucket_file) |bf| {
-        try arg_list.append(gpa, "-p");
-        try arg_list.append(gpa, bf);
-    }
-    if (config.output_file) |out| {
-        try arg_list.append(gpa, "-o");
-        try arg_list.append(gpa, out);
-    }
-
-    try arg_list.append(gpa, config.traces_dir);
+fn cascadesArgs(b: *Build, c: *const CascadesConfig) ![]const []const u8 {
+    var args: std.ArrayList([]const u8) = .empty;
+    if (c.buckets) |n| try args.append(b.allocator, b.fmt("-b{d}", .{n}));
+    if (c.bucket_file) |f| try args.appendSlice(b.allocator, &.{ "-p", f });
+    if (c.output_file) |o| try args.appendSlice(b.allocator, &.{ "-o", o });
+    try args.append(b.allocator, c.traces_dir);
+    return args.items;
 }
 
-fn datasetsArguments(
-    gpa: std.mem.Allocator,
-    arg_list: *std.ArrayList([]const u8),
-    config: *const DatasetConfig,
-) !void {
-    try arg_list.append(gpa, "./bin/dataset-creation");
-
-    if (config.output_dir) |out| {
-        try arg_list.append(gpa, "-output");
-        try arg_list.append(gpa, out);
-    }
-
-    try arg_list.append(gpa, config.cascades_ssv);
-    try arg_list.append(gpa, config.likes_ssv);
-    try arg_list.append(gpa, config.traces_dir);
-    try arg_list.append(gpa, config.dataset);
+fn datasetsArgs(b: *Build, c: *const DatasetConfig) ![]const []const u8 {
+    var args: std.ArrayList([]const u8) = .empty;
+    try args.append(b.allocator, "./bin/dataset-creation");
+    if (c.output_dir) |o| try args.appendSlice(b.allocator, &.{ "-output", o });
+    try args.appendSlice(b.allocator, &.{ c.cascades_ssv, c.likes_ssv, c.traces_dir, c.dataset });
+    return args.items;
 }

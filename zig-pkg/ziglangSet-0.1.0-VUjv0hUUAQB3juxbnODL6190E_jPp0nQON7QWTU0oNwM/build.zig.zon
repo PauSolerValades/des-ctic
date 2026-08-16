@@ -1,0 +1,17 @@
+.{
+    .name = .ziglangSet,
+    .version = "0.1.0",
+    .fingerprint = 0x65aa5acd2ef4855,
+    .minimum_zig_version = "0.16.0",
+
+    .dependencies = .{},
+
+    .paths = .{
+        "LICENSE",
+        "build.zig",
+        "build.zig.zon",
+        "src/hash_set.zig",
+        "src/array_hash_set.zig",
+        "src/root.zig",
+    },
+}

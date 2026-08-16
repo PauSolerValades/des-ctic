@@ -1,0 +1,13 @@
+.{
+    .name = .tabular,
+    .version = "0.0.0",
+    .fingerprint = 0x7ad0fb884cd61d3c, // Changing this has security and trust implications.
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{},
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "README.md",
+    },
+}
