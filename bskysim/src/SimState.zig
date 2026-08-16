@@ -86,16 +86,20 @@ pub fn clone(self: *const @This(), arena: Allocator, gpa: Allocator) !@This() {
 const tabular = @import("tabular");
 
 /// Builds a distribution from a row of a params table.
+/// Params tables (from the fit pipeline) use R conventions: gamma (shape, rate),
+/// lognormal (meanlog, sdlog), weibull (shape, scale), gpd (xi, sigma, mu).
+/// The distributions package wants: gamma (shape, scale), lognormal (mean, variance),
+/// weibull (scale, shape), gpd (location, scale, shape).
 fn distFromRow(tag: DistTag, params: []const f32) NNContDist(f32) {
     return switch (tag) {
         .constant => .{ .constant = .init(params[0]) },
         .exponential => .{ .exponential = .init(params[0]) },
         .uniform => .{ .uniform = .init(params[0], params[1], .cc) },
-        .lognormal => .{ .lognormal = .init(params[0], params[1]) },
-        .weibull => .{ .weibull = .init(params[0], params[1]) },
-        .gamma => .{ .gamma = .init(params[0], params[1]) },
+        .lognormal => .{ .lognormal = .init(params[0], params[1] * params[1]) },
+        .weibull => .{ .weibull = .init(params[1], params[0]) },
+        .gamma => .{ .gamma = .init(params[0], 1.0 / params[1]) },
         .pareto => .{ .pareto = .init(params[0], params[1]) },
-        .gpareto => .{ .gpareto = .init(params[0], params[1], params[2]) },
+        .gpareto => .{ .gpareto = .init(params[2], params[1], params[0]) },
     };
 }
 
