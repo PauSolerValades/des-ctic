@@ -86,14 +86,15 @@ This is the dataset that will be used to generate the real lifetime post dataset
 Features:
 - run_id (pk)
 - post_id (pk)
+- author_id: user_id from the creation event
 - post_creation_time
 - reposter_id: user_id of who reposted the post.
 - parent_id (pk): where the reposted id received the post. 
 - propagated_time: when the post arrived to the reposter_id queue
 - repost_time: when the repost over post_id was performed.
 - sitting_in_timeline: how much time the post_id was in a timeline before being reposted (repost_time - propagated_time)
-- global_gap: (time of the last repost of this post disregarding parent_id) - (time of the current repost)
-- topology_gap: (time of the last repost coming from parent_id) - (time of the current repost) 
+- global_gap: (time of the last repost of this post disregarding parent_id) - (time of the current repost). NULL for the first repost of the post.
+- topology_gap: (time of the last repost coming from parent_id) - (time of the current repost). NULL for the first repost from each parent.
 
 ### Post Lifetime Dataset 
 Computation of the normal aggregated metrics of post lifetime analysis. This is obtained from the global_gap metric from the upper dataset, so it's technically not raw.

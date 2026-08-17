@@ -22,7 +22,7 @@ COPY (
     FROM read_json('{{.TracesDir}}/*-propagate_trace.jsonl', filename=true, ignore_errors=true)
   ),
   creations AS (
-    SELECT run_id, post_id AS cpid, time AS creation_time
+    SELECT run_id, post_id AS cpid, user_id AS author_id, time AS creation_time
     FROM read_csv('{{.CascadesSSV}}', sep='\t', header=true,
       columns={'run_id': 'INTEGER', 'post_id': 'INTEGER', 'user_id': 'INTEGER',
                'parent_id': 'INTEGER', 'type': 'VARCHAR', 'time': 'DOUBLE'},
@@ -32,7 +32,7 @@ COPY (
 
   with_propagation AS (
     SELECT
-      r.run_id, r.rpid AS post_id, c.creation_time,
+      r.run_id, r.rpid AS post_id, c.author_id, c.creation_time,
       r.reposter_id, r.rparent AS parent_id,
       p.propagated_time, r.repost_time,
       r.repost_time - p.propagated_time AS sitting_in_timeline
@@ -56,7 +56,7 @@ COPY (
   )
 
   SELECT
-    run_id, post_id, creation_time, reposter_id, parent_id,
+    run_id, post_id, author_id, creation_time, reposter_id, parent_id,
     propagated_time, repost_time, sitting_in_timeline,
     global_gap, topology_gap
   FROM with_gaps
