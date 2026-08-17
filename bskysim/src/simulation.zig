@@ -268,9 +268,12 @@ pub fn simulate(
         // it will be never triggered.
         // also, propagation must be excluded, as the user has already interacted.
         if (current_event.type != .propagate) {
+            // wake-up .start events fire while the user is offline: they must
+            // bypass the online gate or no user can ever come back online.
+            const is_wakeup: bool = current_event.type == .session and current_event.type.session == .start;
             const is_event_stale: bool = current_event.session_gen != user_session[current_uid];
             const is_user_online: bool = user_online[current_uid];
-            if (is_event_stale or !is_user_online) {
+            if (is_event_stale or (!is_user_online and !is_wakeup)) {
                 metrics.dropped_events += 1;
                 continue;
             }
