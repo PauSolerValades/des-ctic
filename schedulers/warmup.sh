@@ -13,7 +13,6 @@ RUNS=5
 rm -rf steps/warmup
 mkdir -p steps/warmup/tmp
 
-first=1
 for name in 10K 50K 100K 250K 500K 750K 1M; do
     case "$name" in
         10K|50K) workers=8 ;;
@@ -43,19 +42,10 @@ for name in 10K 50K 100K 250K 500K 750K 1M; do
 EOF
 
         echo "[$name w$w] $(date)"
-        if [ "$first" -eq 1 ]; then
-            if [ "$DRY" = "--dry-run" ]; then
-                echo "  zig build -Dconfig=$cfg -Dcompile=simulation all"
-            else
-                zig build -Dconfig="$cfg" -Dcompile=simulation all
-            fi
-            first=0
+        if [ "$DRY" = "--dry-run" ]; then
+            echo "  zig build -Dconfig=$cfg all"
         else
-            if [ "$DRY" = "--dry-run" ]; then
-                echo "  zig build -Dconfig=$cfg all"
-            else
-                zig build -Dconfig="$cfg" all
-            fi
+            zig build -Dconfig="$cfg" all
         fi
     done
 done

@@ -80,12 +80,18 @@ pub fn build(b: *Build) !void {
     p_datasets.dependOn(p_cascades);
     pipeline_step.dependOn(p_datasets);
 
-    // All: full chain, ordered.
+    // All: full chain, ordered — sections absent from the config are skipped.
     const a_sim = zigStage(b, sim_exe, sim_argv, "simulation");
-    const a_cascades = zigStage(b, cascades_exe, cascades_argv, "cascade");
-    a_cascades.dependOn(a_sim);
-    const a_datasets = goStage(b, datasets_argv, &go_build.step, "dataset");
-    a_datasets.dependOn(a_cascades);
+    var a_cascades = a_sim;
+    if (cascades_argv) |_| {
+        a_cascades = zigStage(b, cascades_exe, cascades_argv, "cascade");
+        a_cascades.dependOn(a_sim);
+    }
+    var a_datasets = a_cascades;
+    if (datasets_argv) |_| {
+        a_datasets = goStage(b, datasets_argv, &go_build.step, "dataset");
+        a_datasets.dependOn(a_cascades);
+    }
     all_step.dependOn(a_datasets);
 }
 

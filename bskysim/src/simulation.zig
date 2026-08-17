@@ -112,7 +112,9 @@ fn stageOne(
         metrics.generated_events += 1;
     }
 
-    while (t_clock.* <= simconf.warmup_time and queue.items.len > 0) {
+    // ponytail: warmup=0 skips only the processing loop; the kickstart
+    // first-post events above must always be queued or no posts ever exist.
+    while (simconf.warmup_time != 0 and t_clock.* <= simconf.warmup_time and queue.items.len > 0) {
         const current_event = queue.pop();
         t_clock.* = current_event.time;
 
@@ -222,9 +224,7 @@ pub fn simulate(
     defer queue.deinit(gpa);
 
     // generation on init
-    if (simconf.warmup_time != 0) {
-        try stageOne(gpa, arena, rng, simconf, topology, state, &queue, &metrics, &t_clock, traces);
-    }
+    try stageOne(gpa, arena, rng, simconf, topology, state, &queue, &metrics, &t_clock, traces);
     // queue.clearRetainingCapacity();
 
     // Warmup propagated all posts into getBackground(). Swap so they're

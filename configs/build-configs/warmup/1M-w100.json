@@ -1,0 +1,16 @@
+{
+  "simulation": null,
+  "cascade": {
+    "buckets": null,
+    "bucket_file": null,
+    "output_file": "cascades/1M-warmup/warmup-100.tsv",
+    "traces_dir": "steps/warmup/traces/1M-warmup/100-ticks"
+  },
+  "dataset": {
+    "output_dir": "datasets/1M-warmup/warmup-100",
+    "cascades_ssv": "cascades/1M-warmup/warmup-100.tsv",
+    "likes_ssv": "cascades/1M-warmup/warmup-100_likes.tsv",
+    "traces_dir": "steps/warmup/traces/1M-warmup/100-ticks",
+    "dataset": "all"
+  }
+}

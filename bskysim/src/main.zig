@@ -261,7 +261,7 @@ fn simulationBatch(
 
     if (worker_id == 0) {
         // Dump the configuration
-        var b: [64]u8 = undefined;
+        var b: [std.fs.max_path_bytes]u8 = undefined;
         const path = try std.fmt.bufPrint(&b, "{s}/user_distributions.tsv", .{run_dir});
         try state.dumpUsers(io, path);
     }
