@@ -10,13 +10,12 @@ const DaryHeap = @import("ds").DaryHeap;
 
 const dist = @import("distributions");
 
-const SimConfig = @import("SimConfig.zig");
-const Precision = @import("SimConfig.zig").Precision;
+const SimParams = @import("SimParams.zig");
 const SimResults = @import("SimResult.zig");
 const entities = @import("entities.zig");
 const t = @import("traces.zig");
 const Topology = @import("Topology.zig");
-const UserParams = @import("UserParams.zig");
+const SimUsers = @import("SimUsers.zig");
 const gen = @import("events.zig");
 
 const SimState = @import("SimState.zig");
@@ -38,8 +37,9 @@ const TraceSwap = t.TraceSwap;
 const TraceWriters = t.TraceWriters;
 const SimError = entities.SimError;
 
-const TimelineEvent = entities.TimelineEvent;
-const compareTimelineEvent = entities.compareTimelineEvent;
+const timeline = @import("timeline.zig");
+const TimelineEvent = timeline.TimelineEvent;
+const compareTimelineEvent = timeline.compareTimelineEvent;
 
 const EventQueue: type = DaryHeap(Event, 8, void, entities.compareEvent);
 
@@ -62,7 +62,12 @@ pub const SimMetrics = struct {
     max_duration_ends: u64 = 0,
 };
 
-const Unif = dist.Uniform(Precision);
+pub const SimCtx = struct {
+    global: SimParams,
+    users: SimUsers,
+};
+
+const Unif = dist.Uniform(f32);
 
 fn propagatePost(gpa: Allocator, topology: *const Topology, state: *SimState, t_clock: f64, user_id: u32, post_id: u32, parent_id: u32) SimError!void {
     const start_idx = topology.start[user_id];
@@ -82,10 +87,10 @@ fn propagatePost(gpa: Allocator, topology: *const Topology, state: *SimState, t_
     for (followers) |fid| {
         // Skip if follower already interacted with this post (liked/reposted).
         // This avoids useless heap insertions for posts that would be skipped later.
-        if (state.users[fid].reposted_posts.get(post_id)) continue;
+        if (state.users.items(.reposted_posts)[fid].get(post_id) != null) continue;
         // if (state.user_interact_post.isSet(fid, post_id)) continue;
         // this is the backlog, propagation is not in the active timeline
-        state.timelines[fid].getBackground().push(gpa, tl_event) catch return error.OutOfMemoryTimeline;
+        state.users.items(.timeline)[fid].getBackground().push(gpa, tl_event) catch return error.OutOfMemoryTimeline;
     }
 }
 
@@ -93,8 +98,8 @@ fn stageOne(
     gpa: Allocator,
     arena: Allocator,
     rng: Random,
-    simconf: *const SimConfig,
     topology: *const Topology,
+    params: *const SimCtx,
     state: *SimState,
     queue: *EventQueue,
     metrics: *SimMetrics,
@@ -108,14 +113,13 @@ fn stageOne(
 
     for (0..state.users.len) |uid| {
         // we create a creation event
-        const create_post = gen.eventCreateFirstPost(rng, simconf, &state.users, t_clock.*, @intCast(uid), 0, metrics.generated_events);
+        const create_post = gen.eventCreateFirstPost(rng, params, t_clock.*, @intCast(uid), 0, metrics.generated_events);
         queue.push(gpa, create_post) catch return error.OutOfMemoryQueue;
         metrics.generated_events += 1;
     }
 
-    // ponytail: warmup=0 skips only the processing loop; the kickstart
     // first-post events above must always be queued or no posts ever exist.
-    while (simconf.warmup_time != 0 and t_clock.* <= simconf.warmup_time and queue.items.len > 0) {
+    while (params.global.warmup_time != 0 and t_clock.* <= params.global.warmup_time and queue.items.len > 0) {
         const current_event = queue.pop();
         t_clock.* = current_event.time;
 
@@ -131,11 +135,11 @@ fn stageOne(
                 // state.user_interact_post.ensureItemCapacity(arena, new_post_id) catch return error.OutOfMemoryPagedBitSet;
 
                 // creator has seen and implicitly interacted with their own post
-                state.users[current_uid].seen_posts.putNoClobber(gpa, new_post_id);
-                state.users[current_uid].liked_posts.putNoClobber(gpa, new_post_id);
-                state.users[current_uid].reposted_posts.putNoClobber(gpa, new_post_id);
+                state.users.items(.seen_posts)[current_uid].putNoClobber(gpa, new_post_id, new_post_id) catch return error.OutOfMemoryUserMap;
+                state.users.items(.liked_posts)[current_uid].putNoClobber(gpa, new_post_id, new_post_id) catch return error.OutOfMemoryUserMap;
+                state.users.items(.reposted_posts)[current_uid].putNoClobber(gpa, new_post_id, new_post_id) catch return error.OutOfMemoryUserMap;
 
-                const propagate = gen.eventPropagate(rng, simconf, t_clock.*, current_uid, new_post_id, current_uid, metrics.generated_events);
+                const propagate = gen.eventPropagate(rng, params, t_clock.*, current_uid, new_post_id, current_uid, metrics.generated_events);
                 queue.push(gpa, propagate) catch return error.OutOfMemoryQueue;
                 metrics.generated_events += 1;
 
@@ -146,7 +150,7 @@ fn stageOne(
                 metrics.post_count += 1;
                 metrics.posts_at_warmup += 1;
 
-                const new_post = gen.eventCreatePost(rng, simconf, &state.users, t_clock.*, current_uid, state.users.items(.session_gen)[current_uid], metrics.generated_events);
+                const new_post = gen.eventCreatePost(rng, params, t_clock.*, current_uid, state.users.items(.session_gen)[current_uid], metrics.generated_events);
                 queue.push(gpa, new_post) catch return error.OutOfMemoryQueue;
                 metrics.generated_events += 1;
             },
@@ -166,7 +170,7 @@ fn stageOne(
 pub fn initSessions(
     gpa: Allocator,
     rng: Random,
-    simconf: *const SimConfig,
+    params: *const SimCtx,
     state: *SimState,
     queue: *EventQueue,
     metrics: *SimMetrics,
@@ -183,10 +187,10 @@ pub fn initSessions(
         // graph.timelines[uid].clearRetainingCapacity();
 
         const r = unif.sample(rng);
-        if (r < simconf.offline_startup_ratio) { // user starts offline
+        if (r < params.global.offline_startup_ratio) { // user starts offline
             user_online[uid] = false;
 
-            const event_start = gen.eventSessionStart(rng, &state.users, t_clock, @intCast(uid), 0, metrics.generated_events);
+            const event_start = gen.eventSessionStart(rng, params, t_clock, @intCast(uid), 0, metrics.generated_events);
             queue.push(gpa, event_start) catch return error.OutOfMemoryQueue;
             metrics.generated_events += 1;
         } else { // users starts online
@@ -201,7 +205,7 @@ pub fn initSessions(
             metrics.*.generated_events += 1;
             metrics.*.processed_events += 1;
 
-            const event_end = gen.eventSessionEnd(rng, &state.users, t_clock, @intCast(uid), 0, metrics.generated_events);
+            const event_end = gen.eventSessionEnd(rng, params, t_clock, @intCast(uid), 0, metrics.generated_events);
             queue.push(gpa, event_end) catch return error.OutOfMemoryQueue;
             metrics.*.generated_events += 1;
         }
@@ -212,9 +216,8 @@ pub fn simulate(
     gpa: Allocator,
     arena: Allocator,
     rng: Random,
-    simconf: *const SimConfig,
     topology: *const Topology,
-    userparams: *const UserParams,
+    simctx: *const SimCtx,
     state: *SimState,
     traces: TraceWriters,
 ) SimError!SimResults {
@@ -227,32 +230,32 @@ pub fn simulate(
     defer queue.deinit(gpa);
 
     // generation on init
-    try stageOne(gpa, arena, rng, simconf, topology, state, &queue, &metrics, &t_clock, traces);
+    try stageOne(gpa, arena, rng, topology, simctx, state, &queue, &metrics, &t_clock, traces);
     // queue.clearRetainingCapacity();
 
     // Warmup propagated all posts into getBackground(). Swap so they're
     // immediately visible when the real simulation starts.
     for (0..state.users.len) |uid| {
-        state.timelines[uid].switchTl();
+        state.users.items(.timeline)[uid].switchTl();
         const sw = TraceSwap{ .time = t_clock, .user_id = @intCast(uid), .reason = .simulation_start };
         const sw_bytes = std.mem.asBytes(&sw);
         try traces.swaps.writeAll(sw_bytes);
     }
 
     // decide which users start online or not
-    try initSessions(gpa, rng, simconf, state, &queue, &metrics, t_clock, traces);
+    try initSessions(gpa, rng, simctx, state, &queue, &metrics, t_clock, traces);
 
     // combine this with the initSessions, it's dumb to iterate twice xd
     // set online users first action
     for (0..state.users.len) |uid| {
         if (state.users.items(.is_online)[uid]) {
-            const first_action = gen.eventAction(rng, simconf, t_clock, @intCast(uid), 0, metrics.generated_events);
+            const first_action = gen.eventAction(rng, simctx, t_clock, @intCast(uid), 0, metrics.generated_events);
             queue.push(gpa, first_action) catch return error.OutOfMemoryQueue;
             metrics.generated_events += 1;
         }
     }
 
-    const t_end = @min(simconf.warmup_time + simconf.duration, simconf.horizon);
+    const t_end = @min(simctx.global.warmup_time + simctx.global.duration, simctx.global.horizon);
 
     const user_session = state.users.items(.session_gen);
     const user_online = state.users.items(.is_online);
@@ -290,11 +293,11 @@ pub fn simulate(
                 // state.user_interact_post.ensureItemCapacity(arena, new_post_id) catch return error.OutOfMemoryPagedBitSet;
                 // creator has seen and implicitly interacted with their own post
 
-                state.users[current_uid].seen_posts.putNoClobber(gpa, new_post_id, new_post_id);
-                state.users[current_uid].liked_posts.putNoClobber(gpa, new_post_id, new_post_id);
-                state.users[current_uid].reposted_posts.putNoClobber(gpa, new_post_id, new_post_id);
+                state.users.items(.seen_posts)[current_uid].putNoClobber(gpa, new_post_id, new_post_id) catch return error.OutOfMemoryUserMap;
+                state.users.items(.liked_posts)[current_uid].putNoClobber(gpa, new_post_id, new_post_id) catch return error.OutOfMemoryUserMap;
+                state.users.items(.reposted_posts)[current_uid].putNoClobber(gpa, new_post_id, new_post_id) catch return error.OutOfMemoryUserMap;
 
-                const propagate = gen.eventPropagate(rng, simconf, t_clock, current_uid, new_post_id, current_uid, metrics.generated_events);
+                const propagate = gen.eventPropagate(rng, simctx, t_clock, current_uid, new_post_id, current_uid, metrics.generated_events);
                 queue.push(gpa, propagate) catch return error.OutOfMemoryQueue;
                 metrics.generated_events += 1;
 
@@ -304,14 +307,14 @@ pub fn simulate(
                 metrics.post_count += 1;
                 metrics.processed_events += 1;
 
-                const new_post = gen.eventCreatePost(rng, simconf, &state.users, t_clock, current_uid, user_session[current_uid], metrics.generated_events);
+                const new_post = gen.eventCreatePost(rng, simctx, t_clock, current_uid, user_session[current_uid], metrics.generated_events);
                 queue.push(gpa, new_post) catch return error.OutOfMemoryQueue;
                 metrics.generated_events += 1;
             },
 
             .session => |ssn| {
-                const user_timeline = state.timelines[current_uid].getActive();
-                const background_timeline = state.timelines[current_uid].getBackground();
+                const user_timeline = state.users.items(.timeline)[current_uid].getActive();
+                const background_timeline = state.users.items(.timeline)[current_uid].getBackground();
                 // a .end_boredom check not needed as backlog is zero for sure
                 const backlog: u32 = if (ssn == .end) @intCast(background_timeline.items.len) else 0;
                 const s = TraceSession{ .time = t_clock, .type = ssn, .user_id = current_uid, .event_id = metrics.processed_events, .gen_id = gen_id, .backlog = backlog };
@@ -327,21 +330,21 @@ pub fn simulate(
                         metrics.total_sessions += 1;
 
                         // swap to bring backlog (posts accumulated during offline + previous session) to the front
-                        state.timelines[current_uid].switchTl();
+                        state.users.items(.timeline)[current_uid].switchTl();
 
                         const sw = TraceSwap{ .time = t_clock, .user_id = current_uid, .reason = .session_start };
                         const sw_bytes = std.mem.asBytes(&sw);
                         try traces.swaps.writeAll(sw_bytes);
 
-                        const first_action = gen.eventAction(rng, simconf, t_clock, current_uid, user_session[current_uid], metrics.generated_events);
+                        const first_action = gen.eventAction(rng, simctx, t_clock, current_uid, user_session[current_uid], metrics.generated_events);
                         queue.push(gpa, first_action) catch return error.OutOfMemoryQueue;
                         metrics.generated_events += 1;
 
-                        const new_post = gen.eventCreateFirstPost(rng, simconf, &state.users, t_clock, current_uid, user_session[current_uid], metrics.generated_events);
+                        const new_post = gen.eventCreateFirstPost(rng, simctx, t_clock, current_uid, user_session[current_uid], metrics.generated_events);
                         queue.push(gpa, new_post) catch return error.OutOfMemoryQueue;
                         metrics.generated_events += 1;
 
-                        const end_session = gen.eventSessionEnd(rng, &state.users, t_clock, current_uid, user_session[current_uid], metrics.generated_events);
+                        const end_session = gen.eventSessionEnd(rng, simctx, t_clock, current_uid, user_session[current_uid], metrics.generated_events);
                         queue.push(gpa, end_session) catch return error.OutOfMemoryQueue;
                         metrics.generated_events += 1;
                     },
@@ -352,7 +355,7 @@ pub fn simulate(
                         metrics.total_online_time += (t_clock - user_session_start[current_uid]);
                         metrics.max_duration_ends += 1;
 
-                        const start_session = gen.eventSessionStart(rng, &state.users, t_clock, current_uid, user_session[current_uid], metrics.generated_events);
+                        const start_session = gen.eventSessionStart(rng, simctx, t_clock, current_uid, user_session[current_uid], metrics.generated_events);
                         queue.push(gpa, start_session) catch return error.OutOfMemoryQueue;
                         metrics.generated_events += 1;
 
@@ -366,7 +369,7 @@ pub fn simulate(
             },
 
             .action => |act| {
-                const user_timeline = state.timelines[current_uid].getActive();
+                const user_timeline = state.users.items(.timeline)[current_uid].getActive();
 
                 if (user_timeline.items.len != 0) {
                     // Drain already-interacted posts inline to avoid bouncing
@@ -374,7 +377,7 @@ pub fn simulate(
                     var post: ?TimelineEvent = null;
                     while (user_timeline.items.len > 0) {
                         const candidate = user_timeline.pop();
-                        if (state.users[current_uid].get(candidate.post_id)) |_| {} else {
+                        if (state.users.items(.seen_posts)[current_uid].get(candidate.post_id)) |_| {} else {
                             post = candidate;
                             break;
                         }
@@ -386,21 +389,21 @@ pub fn simulate(
                         try traces.action.writeAll(bytes);
 
                         // Always mark as seen (diagnostic: counts every exposure)
-                        state.users[current_uid].seen_posts.putNoClobber(gpa, p.post_id, p.post_id);
+                        state.users.items(.seen_posts)[current_uid].putNoClobber(gpa, p.post_id, p.post_id) catch return error.OutOfMemoryUserMap;
                         metrics.impressions += 1;
 
                         switch (act) {
                             .repost => {
                                 // desensitized: user propagated, can't interact with this post again
-                                state.users[current_uid].reposted_post.PutNoClobber(p.post_id);
+                                state.users.items(.reposted_posts)[current_uid].putNoClobber(gpa, p.post_id, p.post_id) catch return error.OutOfMemoryUserMap;
 
-                                const propagate = gen.eventPropagate(rng, simconf, t_clock, current_uid, p.post_id, current_uid, metrics.generated_events);
+                                const propagate = gen.eventPropagate(rng, simctx, t_clock, current_uid, p.post_id, current_uid, metrics.generated_events);
                                 queue.push(gpa, propagate) catch return error.OutOfMemoryQueue;
                                 metrics.generated_events += 1;
                                 metrics.reposts += 1;
                             },
                             .like => {
-                                state.users[current_uid].liked_post.PutNoClobber(p.post_id);
+                                state.users.items(.liked_posts)[current_uid].putNoClobber(gpa, p.post_id, p.post_id) catch return error.OutOfMemoryUserMap;
                                 // desensitized: user consumed and acknowledged (platform prevents double-liking)
                                 metrics.likes += 1;
                             },
@@ -413,11 +416,11 @@ pub fn simulate(
                         metrics.processed_events += 1;
                     }
 
-                    const event = gen.eventAction(rng, simconf, t_clock, current_uid, user_session[current_uid], metrics.generated_events);
+                    const event = gen.eventAction(rng, simctx, t_clock, current_uid, user_session[current_uid], metrics.generated_events);
                     queue.push(gpa, event) catch return error.OutOfMemoryQueue;
                     metrics.generated_events += 1;
                 } else {
-                    const background_timeline = state.timelines[current_uid].getBackground();
+                    const background_timeline = state.users.items(.timeline)[current_uid].getBackground();
 
                     if (background_timeline.items.len == 0) {
                         // Boredom mechanic
@@ -431,19 +434,19 @@ pub fn simulate(
                         const bytes = std.mem.asBytes(&s);
                         try traces.session.writeAll(bytes);
 
-                        const bored_start = gen.eventSessionStart(rng, &state.users, t_clock, current_uid, user_session[current_uid], metrics.generated_events);
+                        const bored_start = gen.eventSessionStart(rng, simctx, t_clock, current_uid, user_session[current_uid], metrics.generated_events);
                         queue.push(gpa, bored_start) catch return error.OutOfMemoryQueue;
                         metrics.generated_events += 1;
                         metrics.processed_events += 1;
                     } else {
                         // switch the timelines add a new event action which will be from the other timeline
-                        state.timelines[current_uid].switchTl();
+                        state.users.items(.timeline)[current_uid].switchTl();
 
                         const sw = TraceSwap{ .time = t_clock, .user_id = current_uid, .reason = .refresh };
                         const sw_bytes = std.mem.asBytes(&sw);
                         try traces.swaps.writeAll(sw_bytes);
 
-                        const action = gen.eventAction(rng, simconf, t_clock, current_uid, user_session[current_uid], metrics.generated_events);
+                        const action = gen.eventAction(rng, simctx, t_clock, current_uid, user_session[current_uid], metrics.generated_events);
                         queue.push(gpa, action) catch return error.OutOfMemoryQueue;
                         metrics.generated_events += 1;
                     }
@@ -468,17 +471,17 @@ pub fn simulate(
 
     var total_active_backlog: usize = 0;
     var total_backlog: usize = 0;
-    for (state.timelines) |*timeline| {
-        total_active_backlog += timeline.getActive().items.len;
-        total_backlog += timeline.getActive().items.len + timeline.getBackground().items.len;
+    for (state.users.items(.timeline)) |*tl| {
+        total_active_backlog += tl.getActive().items.len;
+        total_backlog += tl.getActive().items.len + tl.getBackground().items.len;
     }
 
     const mean_active: f64 = @as(f64, @floatFromInt(total_active_backlog)) / @as(f64, @floatFromInt(state.users.len));
     const mean_total: f64 = @as(f64, @floatFromInt(total_backlog)) / @as(f64, @floatFromInt(state.users.len));
 
     var sum_sq_diff: f64 = 0.0;
-    for (state.timelines) |*timeline| {
-        const v: f64 = @floatFromInt(timeline.getActive().items.len + timeline.getBackground().items.len);
+    for (state.users.items(.timeline)) |*tl| {
+        const v: f64 = @floatFromInt(tl.getActive().items.len + tl.getBackground().items.len);
         const diff = v - mean_total;
         sum_sq_diff += diff * diff;
     }

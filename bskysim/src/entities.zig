@@ -5,14 +5,10 @@ const Io = std.Io;
 
 const Heap = @import("ds").Heap;
 
-const config = @import("SimConfig.zig");
-
 const ds = @import("ds");
 
 const Order = std.math.Order;
 const ArrayList = std.ArrayList;
-
-const Precision = config.Precision;
 
 /// Post of the simulation
 pub const Post = struct {
@@ -72,5 +68,6 @@ pub const SimError = error{
     OutOfMemoryTimeline,
     OutOfMemorySMAList,
     OutOfMemoryPagedBitSet,
+    OutOfMemoryUserMap,
     WriteFailed,
 };

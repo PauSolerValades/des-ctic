@@ -19,14 +19,12 @@ const ds = @import("ds");
 const SegmentedMultiArrayList = ds.SegmentedMultiArrayList;
 const PagedBitSet = ds.PagedBitSet;
 
-const User = entities.UserState;
-const UserParams = entities.UserConfig;
 const Post = entities.Post;
 
 const NNContDist = stats.NonNegativeContinuousDistribution;
 const DistTag = std.meta.Tag(NNContDist(f32));
 
-pub const UserState = struct {
+pub const User = struct {
     id: u32,
     is_online: bool,
     session_gen: u32,
@@ -44,7 +42,8 @@ posts: SegmentedMultiArrayList(Post, 16),
 const Self = @This();
 
 pub fn create(arena: Allocator, gpa: Allocator, topology: *const Topology) !Self {
-    var users: MultiArrayList(UserState) = try .initCapactiy(arena, topology.nodes);
+    var users: MultiArrayList(User) = .empty;
+    try users.ensureTotalCapacity(arena, topology.nodes);
 
     for (0..topology.nodes) |i| {
         //TODO: what about ensuring capacity on the seen, liked, and reposted?
@@ -52,7 +51,7 @@ pub fn create(arena: Allocator, gpa: Allocator, topology: *const Topology) !Self
         // analyze better how to manage that memory, maybe with a gpa makes more sense given the
         // relation with the duration of the simulation
         const user: User = .{
-            .id = i,
+            .id = @intCast(i),
             .is_online = false,
             .session_gen = 0,
             .num_posts = 0,
@@ -63,7 +62,7 @@ pub fn create(arena: Allocator, gpa: Allocator, topology: *const Topology) !Self
             .timeline = try .create(gpa, 1024),
         };
 
-        users.append(arena, user);
+        users.appendAssumeCapacity(user);
     }
 
     return .{
@@ -73,8 +72,11 @@ pub fn create(arena: Allocator, gpa: Allocator, topology: *const Topology) !Self
 }
 
 pub fn delete(self: *Self, arena: Allocator, gpa: Allocator) void {
-    for (self.timelines) |tl| {
-        tl.delete(gpa);
+    for (0..self.users.len) |i| {
+        self.users.items(.timeline)[i].delete(gpa);
+        self.users.items(.seen_posts)[i].deinit(gpa);
+        self.users.items(.liked_posts)[i].deinit(gpa);
+        self.users.items(.reposted_posts)[i].deinit(gpa);
     }
 
     self.posts.deinit(arena);
@@ -106,12 +108,13 @@ pub fn reset(self: *@This()) void {
         self.users.items(.session_gen)[i] = 0;
         self.users.items(.num_posts)[i] = 0;
         self.users.items(.session_start_time)[i] = 0.0;
-        self.timelines[i].active = .a;
-        self.timelines[i].a.clearRetainingCapacity();
-        self.timelines[i].b.clearRetainingCapacity();
-        self.seen_posts[i].clearRetainingCapacity();
-        self.liked_posts[i].clearRetainingCapacity();
-        self.reposted_posts[i].clearRetainingCapacity();
+        const tl = &self.users.items(.timeline)[i];
+        tl.active = .a;
+        tl.a.clearRetainingCapacity();
+        tl.b.clearRetainingCapacity();
+        self.users.items(.seen_posts)[i].clearRetainingCapacity();
+        self.users.items(.liked_posts)[i].clearRetainingCapacity();
+        self.users.items(.reposted_posts)[i].clearRetainingCapacity();
     }
 
     self.posts.clearRetainingCapacity();

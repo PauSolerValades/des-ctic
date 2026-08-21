@@ -10,8 +10,7 @@ const NNContDist = stats.NonNegativeContinuousDistribution;
 const ContDist = stats.ContinuousDistribution;
 const DiscDist = stats.DiscreteDistribution;
 
-const Precision = @import("../SimConfig.zig").Precision;
-const UserConf = @import("../SimConfig.zig").UserConf;
+const UserConf = @import("../SimUsers.zig").UserConf;
 const DistTag = std.meta.Tag(NNContDist(f32));
 const Action = @import("../entities.zig").Action;
 
@@ -34,40 +33,40 @@ pub const JsonScannerError = error{
     OutOfMemory,
 };
 
-pub fn parseNonNegativeContinuousDist(scanner: *Scanner, stderr: *Io.Writer, param_name: []const u8) (ParseError || JsonScannerError || error{ InvalidCharacter, WriteFailed })!NNContDist(Precision) {
+pub fn parseNonNegativeContinuousDist(scanner: *Scanner, stderr: *Io.Writer, param_name: []const u8) (ParseError || JsonScannerError || error{ InvalidCharacter, WriteFailed })!NNContDist(f32) {
     if (try scanner.next() != Token.object_begin) return error.UnexpectedToken;
 
     const name_tok = try scanner.next();
     if (name_tok != Token.string) return error.UnexpectedToken;
 
-    const Tag = std.meta.Tag(NNContDist(Precision));
+    const Tag = std.meta.Tag(NNContDist(f32));
     const tag = std.meta.stringToEnum(Tag, name_tok.string) orelse {
         try stderr.print("unknown continuous distribution: '{s}'\n", .{name_tok.string});
         return error.UnknownDistribution;
     };
 
     const dist = switch (tag) {
-        .exponential => try pcdist.parseExponential(NNContDist(Precision), scanner, stderr),
-        .pareto => try pcdist.parsePareto(NNContDist(Precision), scanner, stderr),
-        .uniform => try pcdist.parseUniform(NNContDist(Precision), scanner, param_name, stderr),
-        .constant => try pcdist.parseConstant(NNContDist(Precision), scanner, param_name, stderr),
-        .lognormal => try pcdist.parseLognormal(NNContDist(Precision), scanner, stderr),
-        .weibull => try pcdist.parseWeibull(NNContDist(Precision), scanner, stderr),
-        .gamma => try pcdist.parseGamma(NNContDist(Precision), scanner, stderr),
-        .gpareto => try pcdist.parseGeneralizedPareto(NNContDist(Precision), scanner, stderr),
+        .exponential => try pcdist.parseExponential(NNContDist(f32), scanner, stderr),
+        .pareto => try pcdist.parsePareto(NNContDist(f32), scanner, stderr),
+        .uniform => try pcdist.parseUniform(NNContDist(f32), scanner, param_name, stderr),
+        .constant => try pcdist.parseConstant(NNContDist(f32), scanner, param_name, stderr),
+        .lognormal => try pcdist.parseLognormal(NNContDist(f32), scanner, stderr),
+        .weibull => try pcdist.parseWeibull(NNContDist(f32), scanner, stderr),
+        .gamma => try pcdist.parseGamma(NNContDist(f32), scanner, stderr),
+        .gpareto => try pcdist.parseGeneralizedPareto(NNContDist(f32), scanner, stderr),
     };
 
     if (try scanner.next() != Token.object_end) return error.UnexpectedToken;
     return dist;
 }
 
-pub fn parseContinuousDist(scanner: *Scanner, stderr: *Io.Writer, param_name: []const u8) (ParseError || JsonScannerError || error{ InvalidCharacter, WriteFailed })!ContDist(Precision) {
+pub fn parseContinuousDist(scanner: *Scanner, stderr: *Io.Writer, param_name: []const u8) (ParseError || JsonScannerError || error{ InvalidCharacter, WriteFailed })!ContDist(f32) {
     if (try scanner.next() != Token.object_begin) return error.UnexpectedToken;
 
     const name_tok = try scanner.next();
     if (name_tok != Token.string) return error.UnexpectedToken;
 
-    const Tag = std.meta.Tag(ContDist(Precision));
+    const Tag = std.meta.Tag(ContDist(f32));
     const tag = std.meta.stringToEnum(Tag, name_tok.string) orelse {
         try stderr.print("unknown continuous distribution: '{s}'\n", .{name_tok.string});
         return error.UnknownDistribution;
@@ -92,13 +91,13 @@ pub fn parseContinuousDist(scanner: *Scanner, stderr: *Io.Writer, param_name: []
 // This distribution is not used. and if it were, we would need the typed to be inferred. This is action as life is tought
 // this is very very cool but i am not interested on this. It MUST be a categorical, therefore we can directly call
 // parse categorical
-// pub fn parseDiscreteDist(gpa: Allocator, scanner: *Scanner, stderr: *Io.Writer) (ParseError || JsonScannerError || error{WriteFailed})!DiscDist(Precision, usize) {
+// pub fn parseDiscreteDist(gpa: Allocator, scanner: *Scanner, stderr: *Io.Writer) (ParseError || JsonScannerError || error{WriteFailed})!DiscDist(f32, usize) {
 //     if (try scanner.next() != Token.object_begin) return error.UnexpectedToken;
 
 //     const name_tok = try scanner.next();
 //     if (name_tok != Token.string) return error.UnexpectedToken;
 
-//     const Tag = std.meta.Tag(DiscDist(Precision, usize));
+//     const Tag = std.meta.Tag(DiscDist(f32, usize));
 //     const tag = std.meta.stringToEnum(Tag, name_tok.string) orelse {
 //         try stderr.print("unknown discrete distribution: '{s}'\n", .{name_tok.string});
 //         return error.UnknownDistribution;
@@ -135,9 +134,9 @@ pub fn readKeyString(gpa: Allocator, scanner: *Scanner) (JsonScannerError || All
     return try gpa.dupe(u8, tok.string);
 }
 
-pub fn parseUserPolicyCategorical(gpa: std.mem.Allocator, scanner: *Scanner, stderr: *Io.Writer) (ParseError || JsonScannerError || error{ InvalidCharacter, WriteFailed })!stats.Categorical(Precision, Action) {
+pub fn parseUserPolicyCategorical(gpa: std.mem.Allocator, scanner: *Scanner, stderr: *Io.Writer) (ParseError || JsonScannerError || error{ InvalidCharacter, WriteFailed })!stats.Categorical(f32, Action) {
     if (try scanner.next() != Token.object_begin) return error.UnexpectedToken;
-    var weights: std.ArrayList(Precision) = .empty;
+    var weights: std.ArrayList(f32) = .empty;
     defer weights.deinit(gpa);
     var data: std.ArrayList(Action) = .empty;
     defer data.deinit(gpa);
@@ -155,7 +154,7 @@ pub fn parseUserPolicyCategorical(gpa: std.mem.Allocator, scanner: *Scanner, std
             while (true) {
                 const el = try scanner.next();
                 if (el == Token.array_end) break;
-                const w = try std.fmt.parseFloat(Precision, el.number);
+                const w = try std.fmt.parseFloat(f32, el.number);
                 try weights.append(gpa, w);
             }
             parsed_weights = true;
@@ -184,15 +183,15 @@ pub fn parseUserPolicyCategorical(gpa: std.mem.Allocator, scanner: *Scanner, std
         return error.MissingField;
     }
 
-    const weights_dup = try gpa.dupe(Precision, weights.items);
+    const weights_dup = try gpa.dupe(f32, weights.items);
     errdefer gpa.free(weights_dup);
     const data_dup = try gpa.dupe(Action, data.items);
     errdefer gpa.free(data_dup);
 
-    return try stats.Categorical(Precision, Action).init(gpa, weights_dup, data_dup);
+    return try stats.Categorical(f32, Action).init(gpa, weights_dup, data_dup);
 }
 
-fn readDistTag(scanner: *Scanner, stderr: *Io.Writer) (ParseError || JsonScannerError || error{WriteFailed})!DistTag {
+pub fn readDistTag(scanner: *Scanner, stderr: *Io.Writer) (ParseError || JsonScannerError || error{WriteFailed})!DistTag {
     const tok = try scanner.next();
     if (tok != Token.string) return error.UnexpectedToken;
     return std.meta.stringToEnum(DistTag, tok.string) orelse {
@@ -201,64 +200,65 @@ fn readDistTag(scanner: *Scanner, stderr: *Io.Writer) (ParseError || JsonScanner
     };
 }
 
-const Field = blk: {
-    const fields = @typeInfo(UserConf).@"struct".fields;
-    var names: [fields.len][]const u8 = undefined;
-    var vals: [fields.len]u8 = undefined;
-    for (fields, 0..) |f, i| {
-        names[i] = f.name;
-        vals[i] = i;
-    }
-    break :blk @Enum(u8, .exhaustive, &names, &vals);
-};
+// const Field = blk: {
+//     const fields = @typeInfo(UserConf).@"struct".fields;
+//     var names: [fields.len][]const u8 = undefined;
+//     var vals: [fields.len]u8 = undefined;
+//     for (fields, 0..) |f, i| {
+//         names[i] = f.name;
+//         vals[i] = i;
+//     }
+//     break :blk @Enum(u8, .exhaustive, &names, &vals);
+// };
 
-pub fn parseUsers(gpa: Allocator, scanner: *Scanner, stderr: *Io.Writer) (ParseError || JsonScannerError || error{ InvalidCharacter, WriteFailed })![]UserConf {
-    if (try scanner.next() != Token.array_begin) return error.UnexpectedToken;
+// moved to UserParams.zig, left here just in case
+// pub fn parseUsers(gpa: Allocator, scanner: *Scanner, stderr: *Io.Writer) (ParseError || JsonScannerError || error{ InvalidCharacter, WriteFailed })![]UserConf {
+//     if (try scanner.next() != Token.array_begin) return error.UnexpectedToken;
 
-    var users: ArrayList(UserConf) = .empty;
-    defer users.deinit(gpa);
+//     var users: ArrayList(UserConf) = .empty;
+//     defer users.deinit(gpa);
 
-    var index: usize = 1;
-    while (true) {
-        const tok = try scanner.next();
-        if (tok == Token.array_end) break;
-        if (tok != Token.object_begin) return error.UnexpectedToken;
+//     var index: usize = 1;
+//     while (true) {
+//         const tok = try scanner.next();
+//         if (tok == Token.array_end) break;
+//         if (tok != Token.object_begin) return error.UnexpectedToken;
 
-        var user: UserConf = undefined;
-        const num_fields: usize = @typeInfo(Field).@"enum".fields.len;
-        var have: std.StaticBitSet(num_fields) = .empty;
+//         var user: UserConf = undefined;
+//         const num_fields: usize = @typeInfo(Field).@"enum".fields.len;
+//         var have: std.StaticBitSet(num_fields) = .empty;
 
-        while (true) {
-            const key = try scanner.next();
-            if (key == Token.object_end) break;
-            if (key != Token.string) return error.UnexpectedToken;
+//         while (true) {
+//             const key = try scanner.next();
+//             if (key == Token.object_end) break;
+//             if (key != Token.string) return error.UnexpectedToken;
 
-            const field = std.meta.stringToEnum(Field, key.string) orelse {
-                try stderr.print("Parameter '{s}' is not an valid user parameter\n", .{key.string});
-                return error.UnknownParameter;
-            };
-            have.set(@intFromEnum(field));
+//             const field = std.meta.stringToEnum(Field, key.string) orelse {
+//                 try stderr.print("Parameter '{s}' is not an valid user parameter\n", .{key.string});
+//                 return error.UnknownParameter;
+//             };
+//             have.set(@intFromEnum(field));
 
-            switch (field) {
-                .session_duration => user.session_duration = try readDistTag(scanner, stderr),
-                .inter_session_time => user.inter_session_time = try readDistTag(scanner, stderr),
-                .session_params_path => user.session_params_path = try readKeyString(gpa, scanner),
-                .gap_params_path => user.gap_params_path = try readKeyString(gpa, scanner),
-                .ecdf_post_creation_path => user.ecdf_post_creation_path = try readKeyString(gpa, scanner),
-                .ecdf_offset_creation_path => user.ecdf_offset_creation_path = try readKeyString(gpa, scanner),
-                .probability => user.probability = try readKeyNumber(scanner, Precision),
-            }
-        }
+//             switch (field) {
+//                 .session_duration => user.session_duration = try readDistTag(scanner, stderr),
+//                 .inter_session_time => user.inter_session_time = try readDistTag(scanner, stderr),
+//                 .session_params_path => user.session_params_path = try readKeyString(gpa, scanner),
+//                 .gap_params_path => user.gap_params_path = try readKeyString(gpa, scanner),
+//                 .ecdf_post_creation_path => user.ecdf_post_creation_path = try readKeyString(gpa, scanner),
+//                 .ecdf_offset_creation_path => user.ecdf_offset_creation_path = try readKeyString(gpa, scanner),
+//                 .probability => user.probability = try readKeyNumber(scanner, f32),
+//             }
+//         }
 
-        if (have.count() != num_fields) {
-            inline for (@typeInfo(Field).@"enum".fields) |f| {
-                if (!have.isSet(f.value)) try stderr.print("missing field '{s}' in item {d}\n", .{ f.name, index });
-            }
-            return error.MissingField;
-        }
-        try users.append(gpa, user);
-        index += 1;
-    }
+//         if (have.count() != num_fields) {
+//             inline for (@typeInfo(Field).@"enum".fields) |f| {
+//                 if (!have.isSet(f.value)) try stderr.print("missing field '{s}' in item {d}\n", .{ f.name, index });
+//             }
+//             return error.MissingField;
+//         }
+//         try users.append(gpa, user);
+//         index += 1;
+//     }
 
-    return users.toOwnedSlice(gpa);
-}
+//     return users.toOwnedSlice(gpa);
+// }

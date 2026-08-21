@@ -39,18 +39,11 @@ const readKeyNumber = parse.readKeyNumber;
 const readKeyBool = parse.readKeyBool;
 const readKeyString = parse.readKeyString;
 
-pub const Precision: type = f32;
-
-pub const ConfigError = error{
+pub const GlobalConfigError = error{
     NegativeHorizon,
     NegativeDuration,
     NegativeWarmup,
     DurationBiggerThenHorizon,
-    RepeatedUserPair,
-    ProbabilityNotOne,
-    EcdfPostFileError,
-    EcdfOffsetFileError,
-    SampleParamsFileError,
 };
 
 const Field = blk: {
@@ -65,16 +58,6 @@ const Field = blk: {
 };
 
 const DistTag = std.meta.Tag(NNContDist(f32));
-
-pub const UserConf = struct {
-    session_duration: DistTag,
-    inter_session_time: DistTag,
-    session_params_path: []const u8,
-    gap_params_path: []const u8,
-    ecdf_post_creation_path: []const u8,
-    ecdf_offset_creation_path: []const u8,
-    probability: f32,
-};
 
 seed: ?u64,
 // time marks
@@ -91,8 +74,6 @@ creation_delay: NNContDist(f32),
 // session configuration
 offline_startup_ratio: f32, // which proportion of the users start on vacation
 trace_to_file: bool,
-//the config
-users: []UserConf,
 
 /// Opens the json file and loads the distributions in memory
 pub fn create(io: Io, gpa: Allocator, config_file: []const u8, stderr: *Io.Writer) (parse.ParseError || parse.JsonScannerError || Io.Dir.ReadFileAllocError || json.ParseError(Scanner) || error{ InvalidCharacter, WriteFailed })!@This() {
@@ -131,9 +112,8 @@ pub fn create(io: Io, gpa: Allocator, config_file: []const u8, stderr: *Io.Write
             .propagation_delay => config.propagation_delay = try parse.parseNonNegativeContinuousDist(&scanner, stderr, "propagation_delay"),
             .interaction_delay => config.interaction_delay = try parse.parseNonNegativeContinuousDist(&scanner, stderr, "interaction_delay"),
             .creation_delay => config.creation_delay = try parse.parseNonNegativeContinuousDist(&scanner, stderr, "creation_delay"),
-            .offline_startup_ratio => config.offline_startup_ratio = try readKeyNumber(&scanner, Precision),
+            .offline_startup_ratio => config.offline_startup_ratio = try readKeyNumber(&scanner, f32),
             .trace_to_file => config.trace_to_file = try readKeyBool(&scanner),
-            .users => config.users = try parse.parseUsers(gpa, &scanner, stderr),
         }
     }
 
@@ -150,74 +130,14 @@ pub fn delete(self: *const @This(), gpa: Allocator) void {
     gpa.free(self.user_policy.weights);
     gpa.free(self.user_policy.data);
     self.user_policy.deinit(gpa);
-
-    for (self.users) |u| {
-        gpa.free(u.session_params_path);
-        gpa.free(u.gap_params_path);
-        gpa.free(u.ecdf_post_creation_path);
-        gpa.free(u.ecdf_offset_creation_path);
-    }
-    gpa.free(self.users);
 }
 
-pub fn isValid(self: *const @This(), io: Io, stderr: *Io.Writer) (error{OutOfMemory} || ConfigError || error{WriteFailed})!void {
+pub fn checkValidity(self: *const @This()) (error{OutOfMemory} || GlobalConfigError || error{WriteFailed})!void {
     if (self.horizon <= 0) return error.NegativeHorizon;
     if (self.duration <= 0) return error.NegativeDuration;
     if (self.warmup_time < 0) return error.NegativeWarmup;
 
     if (self.warmup_time + self.duration > self.horizon) return error.DurationBiggerThenHorizon;
-
-    const Pair = struct {
-        first: DistTag,
-        second: DistTag,
-    };
-
-    var buffer: [4096]u8 = undefined;
-    var fba: std.heap.FixedBufferAllocator = .init(&buffer);
-    const allocator = fba.allocator();
-
-    var pairs: ArrayList(Pair) = .empty;
-    defer pairs.deinit(allocator);
-
-    var acc_prob: f32 = 0.0;
-    for (self.users, 0..) |u, i| {
-        const pair = .{ @tagName(u.session_duration), @tagName(u.inter_session_time) };
-
-        std.Io.Dir.cwd().access(io, u.ecdf_post_creation_path, .{ .read = true }) catch |err| {
-            try stderr.print("users[{d}] pair ({s}, {s}): ecdf_post_creation_path '{s}' not readable: {s}\n", .{ i, pair[0], pair[1], u.ecdf_post_creation_path, @errorName(err) });
-            return error.EcdfPostFileError;
-        };
-        std.Io.Dir.cwd().access(io, u.session_params_path, .{ .read = true }) catch |err| {
-            try stderr.print("users[{d}] pair ({s}, {s}): session_params_path '{s}' not readable: {s}\n", .{ i, pair[0], pair[1], u.session_params_path, @errorName(err) });
-            return error.SampleParamsFileError;
-        };
-        std.Io.Dir.cwd().access(io, u.gap_params_path, .{ .read = true }) catch |err| {
-            try stderr.print("users[{d}] pair ({s}, {s}): gap_params_path '{s}' not readable: {s}\n", .{ i, pair[0], pair[1], u.gap_params_path, @errorName(err) });
-            return error.SampleParamsFileError;
-        };
-        std.Io.Dir.cwd().access(io, u.ecdf_offset_creation_path, .{ .read = true }) catch |err| {
-            try stderr.print("users[{d}] pair ({s}, {s}): ecdf_offset_creation_path '{s}' not readable: {s}\n", .{ i, pair[0], pair[1], u.ecdf_offset_creation_path, @errorName(err) });
-            return error.EcdfOffsetFileError;
-        };
-        acc_prob += u.probability;
-
-        // this should be not very big, a small linear search won't hurt anyone
-        for (pairs.items) |p| {
-            if (p.first == u.session_duration and p.second == u.inter_session_time) return error.RepeatedUserPair;
-        }
-        // terrorism
-        try pairs.append(allocator, .{ .first = u.session_duration, .second = u.inter_session_time });
-    }
-
-    // TODO: check that the Distribution picked to generate the posts is not able to
-    // generate a post later than warmup_time. that is:
-    // warmup_inter_post_time.sample(rng) <= conf.warmup_time <==> P(x > conf.warmup_time) = 0 <==> 1 - F(x) = 0
-    // warmup_inter_post_time.cdf(conf.warmup_time) = 1
-    // the problem is that not all the distributions implemented have cdf, and they are not even tested lolol
-    // therefore, we will ---for now--- trust the user
-
-    // TODO: make a reasonable tolerance, not just made up
-    if (!std.math.approxEqRel(f32, acc_prob, 1.0, 0.001)) return error.ProbabilityNotOne;
 }
 
 pub fn format(

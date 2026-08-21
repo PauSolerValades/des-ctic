@@ -7,16 +7,14 @@ const ContDist = stats.ContinuousDistribution;
 const DiscDist = stats.DiscreteDistribution;
 const Interval = stats.Interval;
 
-const Precision = @import("../SimConfig.zig").Precision;
-
 const Action = @import("../entities.zig").Action;
 
 const readKeyNumber = @import("parse.zig").readKeyNumber;
 const readKeyBool = @import("parse.zig").readKeyBool;
 
-// pub fn parseCategorical(gpa: std.mem.Allocator, scanner: *Scanner) !DiscDist(Precision, DataType) {
+// pub fn parseCategorical(gpa: std.mem.Allocator, scanner: *Scanner) !DiscDist(f32, DataType) {
 //     if (try scanner.next() != Token.object_begin) return error.UnexpectedToken;
-//     var weights: std.ArrayList(Precision) = .empty;
+//     var weights: std.ArrayList(f32) = .empty;
 //     defer weights.deinit(gpa);
 //     var data: std.ArrayList(DataType) = .empty;
 //     defer data.deinit(gpa);
@@ -34,7 +32,7 @@ const readKeyBool = @import("parse.zig").readKeyBool;
 //             while (true) {
 //                 const el = try scanner.next();
 //                 if (el == Token.array_end) break;
-//                 const w = try std.fmt.parseFloat(Precision, el.number);
+//                 const w = try std.fmt.parseFloat(f32, el.number);
 //                 try weights.append(gpa, w);
 //             }
 //             parsed_weights = true;
@@ -60,13 +58,13 @@ const readKeyBool = @import("parse.zig").readKeyBool;
 //
 //     if (!parsed_weights or !parsed_data) return error.MissingField;
 //
-//     const weights_dup = try gpa.dupe(Precision, weights.items);
+//     const weights_dup = try gpa.dupe(f32, weights.items);
 //     errdefer gpa.free(weights_dup);
 //     const data_dup = try gpa.dupe(DataType, data.items);
 //     errdefer gpa.free(data_dup);
 //
-//     return DiscDist(Precision, DataType){
-//         .categorical = try stats.Categorical(Precision, DataType).init(gpa, weights_dup, data_dup),
+//     return DiscDist(f32, DataType){
+//         .categorical = try stats.Categorical(f32, DataType).init(gpa, weights_dup, data_dup),
 //     };
 // }
 //

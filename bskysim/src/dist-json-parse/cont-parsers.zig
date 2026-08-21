@@ -6,8 +6,6 @@ const Token = std.json.Token;
 const stats = @import("distributions");
 const Interval = stats.Interval;
 
-const Precision = @import("../SimConfig.zig").Precision;
-
 const ParseError = @import("parse.zig").ParseError;
 const JsonScannerError = @import("parse.zig").JsonScannerError;
 const readKeyNumber = @import("parse.zig").readKeyNumber;
@@ -16,15 +14,15 @@ const readKeyBool = @import("parse.zig").readKeyBool;
 pub fn parseExponential(comptime Dist: type, scanner: *Scanner, stderr: *Io.Writer) (ParseError || JsonScannerError || error{ InvalidCharacter, WriteFailed })!Dist {
     if (try scanner.next() != Token.object_begin) return error.UnexpectedToken;
 
-    var mean: ?Precision = null;
-    var rate: ?Precision = null;
+    var mean: ?f32 = null;
+    var rate: ?f32 = null;
 
     while (true) {
         const tok = try scanner.next();
         if (tok == Token.object_end) break;
         if (tok != Token.string) return error.UnexpectedToken;
 
-        const num = try readKeyNumber(scanner, Precision);
+        const num = try readKeyNumber(scanner, f32);
         if (std.mem.eql(u8, tok.string, "mean")) {
             mean = num;
         } else if (std.mem.eql(u8, tok.string, "rate")) {
@@ -35,8 +33,8 @@ pub fn parseExponential(comptime Dist: type, scanner: *Scanner, stderr: *Io.Writ
         }
     }
 
-    if (mean) |m| return Dist{ .exponential = stats.Exponential(Precision).initMean(m) };
-    if (rate) |r| return Dist{ .exponential = stats.Exponential(Precision).init(r) };
+    if (mean) |m| return Dist{ .exponential = stats.Exponential(f32).initMean(m) };
+    if (rate) |r| return Dist{ .exponential = stats.Exponential(f32).init(r) };
     try stderr.print("exponential: missing required param 'mean' or 'rate'\n", .{});
     return error.MissingField;
 }
@@ -44,15 +42,15 @@ pub fn parseExponential(comptime Dist: type, scanner: *Scanner, stderr: *Io.Writ
 pub fn parsePareto(comptime Dist: type, scanner: *Scanner, stderr: *Io.Writer) (ParseError || JsonScannerError || error{ InvalidCharacter, WriteFailed })!Dist {
     if (try scanner.next() != Token.object_begin) return error.UnexpectedToken;
 
-    var shape: ?Precision = null;
-    var scale: ?Precision = null;
+    var shape: ?f32 = null;
+    var scale: ?f32 = null;
 
     while (true) {
         const tok = try scanner.next();
         if (tok == Token.object_end) break;
         if (tok != Token.string) return error.UnexpectedToken;
 
-        const num = try readKeyNumber(scanner, Precision);
+        const num = try readKeyNumber(scanner, f32);
         if (std.mem.eql(u8, tok.string, "shape")) {
             shape = num;
         } else if (std.mem.eql(u8, tok.string, "scale")) {
@@ -67,14 +65,14 @@ pub fn parsePareto(comptime Dist: type, scanner: *Scanner, stderr: *Io.Writer) (
         try stderr.print("pareto: missing required param (need 'shape' and 'scale')\n", .{});
         return error.MissingField;
     }
-    return Dist{ .pareto = stats.Pareto(Precision).init(shape.?, scale.?) };
+    return Dist{ .pareto = stats.Pareto(f32).init(shape.?, scale.?) };
 }
 
 pub fn parseUniform(comptime Dist: type, scanner: *Scanner, param_name: []const u8, stderr: *Io.Writer) (ParseError || JsonScannerError || error{ InvalidCharacter, WriteFailed })!Dist {
     if (try scanner.next() != Token.object_begin) return error.UnexpectedToken;
 
-    var min: ?Precision = null;
-    var max: ?Precision = null;
+    var min: ?f32 = null;
+    var max: ?f32 = null;
     var interval: ?Interval = null;
 
     while (true) {
@@ -83,10 +81,10 @@ pub fn parseUniform(comptime Dist: type, scanner: *Scanner, param_name: []const 
         if (tok != Token.string) return error.UnexpectedToken;
 
         if (std.mem.eql(u8, tok.string, "min")) {
-            min = try readKeyNumber(scanner, Precision);
+            min = try readKeyNumber(scanner, f32);
             if (min.? < 0) try stderr.print("warning - min ({d}) is negative in '{s}', this could lead to negative times", .{ min.?, param_name });
         } else if (std.mem.eql(u8, tok.string, "max")) {
-            max = try readKeyNumber(scanner, Precision);
+            max = try readKeyNumber(scanner, f32);
             if (max.? < 0) try stderr.print("warning - max ({d}, and therefore min too) is negative in '{s}', this could lead to negative times", .{ max.?, param_name });
         } else if (std.mem.eql(u8, tok.string, "interval")) {
             const s = (try scanner.next()).string;
@@ -110,13 +108,13 @@ pub fn parseUniform(comptime Dist: type, scanner: *Scanner, param_name: []const 
         try stderr.print("warning- min is bigger than max in '{s}'", .{param_name});
         return error.InvalidInterval;
     }
-    return Dist{ .uniform = stats.Uniform(Precision).init(min.?, max.?, interval.?) };
+    return Dist{ .uniform = stats.Uniform(f32).init(min.?, max.?, interval.?) };
 }
 
 pub fn parseConstant(comptime Dist: type, scanner: *Scanner, param_name: []const u8, stderr: *Io.Writer) (ParseError || JsonScannerError || error{ InvalidCharacter, WriteFailed })!Dist {
     if (try scanner.next() != Token.object_begin) return error.UnexpectedToken;
 
-    var value: ?Precision = null;
+    var value: ?f32 = null;
 
     while (true) {
         const tok = try scanner.next();
@@ -124,7 +122,7 @@ pub fn parseConstant(comptime Dist: type, scanner: *Scanner, param_name: []const
         if (tok != Token.string) return error.UnexpectedToken;
 
         if (std.mem.eql(u8, tok.string, "value")) {
-            value = try readKeyNumber(scanner, Precision);
+            value = try readKeyNumber(scanner, f32);
             if (value.? < 0) try stderr.print("warning - value of 'constant' is negative in '{s}'", .{param_name});
         } else {
             try stderr.print("constant: unknown param '{s}' in '{s}'\n", .{ tok.string, param_name });
@@ -136,21 +134,21 @@ pub fn parseConstant(comptime Dist: type, scanner: *Scanner, param_name: []const
         try stderr.print("constant: missing required param 'value'\n", .{});
         return error.MissingField;
     }
-    return Dist{ .constant = stats.Constant(Precision).init(value.?) };
+    return Dist{ .constant = stats.Constant(f32).init(value.?) };
 }
 
 pub fn parseNormal(comptime Dist: type, scanner: *Scanner, stderr: *Io.Writer) (ParseError || JsonScannerError || error{ InvalidCharacter, WriteFailed })!Dist {
     if (try scanner.next() != Token.object_begin) return error.UnexpectedToken;
 
-    var mean: ?Precision = null;
-    var sd: ?Precision = null;
+    var mean: ?f32 = null;
+    var sd: ?f32 = null;
 
     while (true) {
         const tok = try scanner.next();
         if (tok == Token.object_end) break;
         if (tok != Token.string) return error.UnexpectedToken;
 
-        const num = try readKeyNumber(scanner, Precision);
+        const num = try readKeyNumber(scanner, f32);
         if (std.mem.eql(u8, tok.string, "mean")) {
             mean = num;
         } else if (std.mem.eql(u8, tok.string, "sd")) {
@@ -165,21 +163,21 @@ pub fn parseNormal(comptime Dist: type, scanner: *Scanner, stderr: *Io.Writer) (
         try stderr.print("normal: missing required param (need 'mean' and 'sd')\n", .{});
         return error.MissingField;
     }
-    return Dist{ .normal = stats.Normal(Precision).init(mean.?, sd.?) };
+    return Dist{ .normal = stats.Normal(f32).init(mean.?, sd.?) };
 }
 
 pub fn parseLognormal(comptime Dist: type, scanner: *Scanner, stderr: *Io.Writer) (ParseError || JsonScannerError || error{ InvalidCharacter, WriteFailed })!Dist {
     if (try scanner.next() != Token.object_begin) return error.UnexpectedToken;
 
-    var meanlog: ?Precision = null;
-    var sdlog: ?Precision = null;
+    var meanlog: ?f32 = null;
+    var sdlog: ?f32 = null;
 
     while (true) {
         const tok = try scanner.next();
         if (tok == Token.object_end) break;
         if (tok != Token.string) return error.UnexpectedToken;
 
-        const num = try readKeyNumber(scanner, Precision);
+        const num = try readKeyNumber(scanner, f32);
         if (std.mem.eql(u8, tok.string, "meanlog")) {
             meanlog = num;
         } else if (std.mem.eql(u8, tok.string, "sdlog")) {
@@ -194,21 +192,21 @@ pub fn parseLognormal(comptime Dist: type, scanner: *Scanner, stderr: *Io.Writer
         try stderr.print("lognormal: missing required param (need 'meanlog' and 'sdlog')\n", .{});
         return error.MissingField;
     }
-    return Dist{ .lognormal = stats.Lognormal(Precision).init(meanlog.?, sdlog.?) };
+    return Dist{ .lognormal = stats.Lognormal(f32).init(meanlog.?, sdlog.?) };
 }
 
 pub fn parseWeibull(comptime Dist: type, scanner: *Scanner, stderr: *Io.Writer) (ParseError || JsonScannerError || error{ InvalidCharacter, WriteFailed })!Dist {
     if (try scanner.next() != Token.object_begin) return error.UnexpectedToken;
 
-    var scale: ?Precision = null;
-    var shape: ?Precision = null;
+    var scale: ?f32 = null;
+    var shape: ?f32 = null;
 
     while (true) {
         const tok = try scanner.next();
         if (tok == Token.object_end) break;
         if (tok != Token.string) return error.UnexpectedToken;
 
-        const num = try readKeyNumber(scanner, Precision);
+        const num = try readKeyNumber(scanner, f32);
         if (std.mem.eql(u8, tok.string, "scale")) {
             scale = num;
         } else if (std.mem.eql(u8, tok.string, "shape")) {
@@ -223,21 +221,21 @@ pub fn parseWeibull(comptime Dist: type, scanner: *Scanner, stderr: *Io.Writer) 
         try stderr.print("weibull: missing required param (need 'scale' and 'shape')\n", .{});
         return error.MissingField;
     }
-    return Dist{ .weibull = stats.Weibull(Precision).init(shape.?, scale.?) };
+    return Dist{ .weibull = stats.Weibull(f32).init(shape.?, scale.?) };
 }
 
 pub fn parseGamma(comptime Dist: type, scanner: *Scanner, stderr: *Io.Writer) (ParseError || JsonScannerError || error{ InvalidCharacter, WriteFailed })!Dist {
     if (try scanner.next() != Token.object_begin) return error.UnexpectedToken;
 
-    var shape: ?Precision = null;
-    var rate: ?Precision = null;
+    var shape: ?f32 = null;
+    var rate: ?f32 = null;
 
     while (true) {
         const tok = try scanner.next();
         if (tok == Token.object_end) break;
         if (tok != Token.string) return error.UnexpectedToken;
 
-        const num = try readKeyNumber(scanner, Precision);
+        const num = try readKeyNumber(scanner, f32);
         if (std.mem.eql(u8, tok.string, "shape")) {
             shape = num;
         } else if (std.mem.eql(u8, tok.string, "rate")) {
@@ -252,22 +250,22 @@ pub fn parseGamma(comptime Dist: type, scanner: *Scanner, stderr: *Io.Writer) (P
         try stderr.print("gamma: missing required param (need 'shape' and 'rate')\n", .{});
         return error.MissingField;
     }
-    return Dist{ .gamma = stats.Gamma(Precision).init(shape.?, rate.?) };
+    return Dist{ .gamma = stats.Gamma(f32).init(shape.?, rate.?) };
 }
 
 pub fn parseGeneralizedPareto(comptime Dist: type, scanner: *Scanner, stderr: *Io.Writer) (ParseError || JsonScannerError || error{ InvalidCharacter, WriteFailed })!Dist {
     if (try scanner.next() != Token.object_begin) return error.UnexpectedToken;
 
-    var location: ?Precision = null;
-    var scale: ?Precision = null;
-    var shape: ?Precision = null;
+    var location: ?f32 = null;
+    var scale: ?f32 = null;
+    var shape: ?f32 = null;
 
     while (true) {
         const tok = try scanner.next();
         if (tok == Token.object_end) break;
         if (tok != Token.string) return error.UnexpectedToken;
 
-        const num = try readKeyNumber(scanner, Precision);
+        const num = try readKeyNumber(scanner, f32);
         if (std.mem.eql(u8, tok.string, "location")) {
             location = num;
         } else if (std.mem.eql(u8, tok.string, "scale")) {
@@ -284,5 +282,5 @@ pub fn parseGeneralizedPareto(comptime Dist: type, scanner: *Scanner, stderr: *I
         try stderr.print("gpareto: missing required param (need 'location', 'scale' and 'shape')\n", .{});
         return error.MissingField;
     }
-    return Dist{ .gpareto = stats.GeneralizedPareto(Precision).init(location.?, scale.?, shape.?) };
+    return Dist{ .gpareto = stats.GeneralizedPareto(f32).init(location.?, scale.?, shape.?) };
 }

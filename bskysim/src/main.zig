@@ -4,14 +4,16 @@ const Io = std.Io;
 
 const argz = @import("eazy_args");
 
-const SimConfig = @import("SimConfig.zig");
-const simulation = @import("simulation.zig");
-const loader = @import("load-topology.zig");
-const entities = @import("entities.zig");
+const SimParams = @import("SimParams.zig");
 const Topology = @import("Topology.zig");
 const SimState = @import("SimState.zig");
+const SimUsers = @import("SimUsers.zig");
+
+const simulation = @import("simulation.zig");
+const SimCtx = simulation.SimCtx;
+const loader = @import("load-topology.zig");
+const entities = @import("entities.zig");
 const traces = @import("traces.zig");
-const UserParams = @import("UserParams.zig");
 
 const Arg = argz.Argument;
 const Opt = argz.Option;
@@ -23,8 +25,9 @@ const def = .{
     .name = "ctic-adqb",
     .description = "Continuous-Time Independent Cascade, Activity Driven Queue Based Simulation of a Bluesky-like network.",
     .required = .{
-        Arg([]const u8, "datafile", "Data file containing the network definition"),
-        Arg([]const u8, "configfile", "Input parameters"),
+        Arg([]const u8, "datafile", "Network Topology binary data file."),
+        Arg([]const u8, "paramsfile", "Parameters of the simulation."),
+        Arg([]const u8, "userparamsfile", "User sampling and parameters definitions."),
     },
     .options = .{
         Opt(?[]const u8, "outputdir", "o", null, "Dataset name for trace folder"),
@@ -32,7 +35,7 @@ const def = .{
         Opt(u32, "workers", "w", 1, "Units of parallelism"),
     },
     .flags = .{
-        Flag("clean", "c", "Delete the .bin output"),
+        Flag("clean", "c", "Delete the .bin output of the traces"),
         Flag("skipjsonl", "s", "Don't convert to JSONL"),
     },
 };
@@ -55,7 +58,8 @@ pub fn main(init: std.process.Init) !void {
     var arena_json: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
     const data_alloc = arena_json.allocator();
 
-    const config: SimConfig = SimConfig.create(init.io, gpa, args.configfile, stderr) catch |err| {
+    const startTimeLoadConfig = Io.Timestamp.now(init.io, .real);
+    const config: SimParams = SimParams.create(init.io, gpa, args.paramsfile, stderr) catch |err| {
         switch (err) {
             error.OutOfMemory => try stderr.writeAll("Out of memory while parsing config.\n"),
             error.WriteFailed => {}, // stderr already dead, nothing to do, just crash
@@ -66,8 +70,8 @@ pub fn main(init: std.process.Init) !void {
             error.UnknownDistribution, error.UnknownParameter, error.MissingField, error.InvalidInterval, error.InvalidField => {},
             // std.json.ParseError(Scanner): typed parsing of the users array failed
             error.Overflow, error.InvalidNumber, error.InvalidEnumTag, error.DuplicateField, error.UnknownField, error.LengthMismatch, error.ValueTooLong => try stderr.writeAll("Problem while parsing user configuration.\n"),
-            error.FileNotFound => try stderr.print("Config file {s} is not found.\n", .{args.configfile}),
-            error.IsDir => try stderr.print("{s} is a directory.\n", .{args.configfile}),
+            error.FileNotFound => try stderr.print("Config file {s} is not found.\n", .{args.paramsfile}),
+            error.IsDir => try stderr.print("{s} is a directory.\n", .{args.paramsfile}),
             else => try stderr.print("Unexpected error: {}", .{err}),
         }
         try stderr.flush();
@@ -76,17 +80,12 @@ pub fn main(init: std.process.Init) !void {
     defer config.delete(gpa);
     try stderr.flush(); // a warning in the distribution parsing can actually happen
 
-    config.isValid(init.io, stderr) catch |err| {
+    config.checkValidity() catch |err| {
         const msg: []const u8 = switch (err) {
             error.NegativeHorizon => "horizon must be > 0\n",
             error.NegativeDuration => "duration must be > 0\n",
             error.NegativeWarmup => "warmup_time must be > 0\n",
             error.DurationBiggerThenHorizon => "warmup_time + duration must not exceed horizon\n",
-            error.RepeatedUserPair => "users: repeated (session_duration, inter_session_time) pair\n",
-            error.ProbabilityNotOne => "users: probabilities must sum to 1\n",
-            error.EcdfPostFileError => "users: ecdf_post_creation file missing (see detail above)\n",
-            error.EcdfOffsetFileError => "users: ecdf_offset file missing (see detail above)\n",
-            error.SampleParamsFileError => "users: ecdf_parameters file missing (see detail above)\n",
             error.WriteFailed => "", // stderr already dead
             error.OutOfMemory => "out of memory while validating config\n",
         };
@@ -95,18 +94,16 @@ pub fn main(init: std.process.Init) !void {
         std.process.exit(1);
     };
 
+    const elapsedTimeLoadConfig = startTimeLoadConfig.untilNow(init.io, .real);
+    try stdout.print("Time Elapsed Loading Config: {d} ms\n", .{elapsedTimeLoadConfig.toMilliseconds()});
+    try stdout.flush();
+
     const startTimeLoadData = Io.Timestamp.now(init.io, .real);
     const sampled_topology = try loader.BinaryGraph.create(init.io, data_alloc, args.datafile);
     const elapsedTimeLoadData = startTimeLoadData.untilNow(init.io, .real);
 
     try stdout.print("Time Elapsed Loading Data: {d} ms\n", .{elapsedTimeLoadData.toMilliseconds()});
     try stdout.flush();
-
-    const seed = if (config.seed) |s| s else blk: {
-        var os_seed: u64 = undefined;
-        init.io.random(std.mem.asBytes(&os_seed));
-        break :blk os_seed;
-    };
 
     const startTimeWireData = Io.Timestamp.now(init.io, .real);
     var topology: Topology = try .create(arena, sampled_topology);
@@ -132,27 +129,56 @@ pub fn main(init: std.process.Init) !void {
         else => return err,
     };
 
-    try createUsedConfig(init.io, output_job_dir, args.configfile);
+    try createUsedConfig(init.io, output_job_dir, args.paramsfile, "used_config.json");
+    try createUsedConfig(init.io, output_job_dir, args.userparamsfile, "used_userparams.json");
     const times_file = try createExecutionTimes(init.io, output_job_dir);
     defer times_file.close(init.io);
+
+    const seed = if (config.seed) |s| s else blk: {
+        var os_seed: u64 = undefined;
+        init.io.random(std.mem.asBytes(&os_seed));
+        break :blk os_seed;
+    };
 
     var prng: Random.DefaultPrng = .init(seed);
     const rng = prng.random();
 
     const startTimeUsers = Io.Timestamp.now(init.io, .real);
-    var userparams: UserParams = try .create(init.io, arena, rng, &topology, config.users);
-    defer userparams.delete(arena);
+    var simusers: SimUsers = SimUsers.create(init.io, arena, rng, topology.nodes, args.userparamsfile, stderr) catch |err| {
+        switch (err) {
+            error.OutOfMemory => try stderr.writeAll("Out of memory while parsing users file.\n"),
+            error.WriteFailed => {}, // stderr already dead, nothing to do, just crash
+            error.InvalidCharacter => try stderr.writeAll("Invalid number in users file.\n"),
+            error.UnexpectedToken, error.SyntaxError, error.UnexpectedEndOfInput, error.BufferUnderrun => try stderr.writeAll("Invalid JSON users file.\n"),
+            // ParseError: diagnostic already printed by the parser
+            error.UnknownDistribution, error.UnknownParameter, error.MissingField, error.InvalidInterval, error.InvalidField => {},
+            // SimUsers validity: diagnostics already printed by the validator
+            error.RepeatedUserPair => try stderr.writeAll("users: repeated (session_duration, inter_session_time) pair\n"),
+            error.ProbabilityNotOne => try stderr.writeAll("users: probabilities must sum to 1\n"),
+            error.EcdfPostFileError, error.EcdfOffsetFileError, error.SampleParamsFileError => {},
+            error.FileNotFound => try stderr.print("Users file {s} is not found.\n", .{args.userparamsfile}),
+            error.IsDir => try stderr.print("{s} is a directory.\n", .{args.userparamsfile}),
+            else => try stderr.print("Unexpected error: {}", .{err}),
+        }
+        try stderr.flush();
+        std.process.exit(1);
+    };
+    defer simusers.delete(arena);
     const elapsedTimeUsers = startTimeUsers.untilNow(init.io, .real);
 
     try stdout.print("Time Elapsed Assigning Users: {d} ms\n", .{elapsedTimeUsers.toMilliseconds()});
     try stdout.flush();
 
+    const simctx: SimCtx = .{
+        .global = config,
+        .users = simusers,
+    };
+
     try launchWorkers(
         gpa,
         times_file,
         &topology,
-        &userparams,
-        &config,
+        &simctx,
         seed,
         output_job_dir,
         args.workers,
@@ -166,8 +192,7 @@ fn launchWorkers(
     gpa: std.mem.Allocator,
     times_file: Io.File,
     topology: *const Topology,
-    userparams: *const UserParams,
-    config: *const SimConfig,
+    sim: *const SimCtx,
     seed: u64,
     run_dir: []const u8,
     workers: u32,
@@ -193,17 +218,20 @@ fn launchWorkers(
         else
             runs_per_worker;
 
+        const worker_config: WorkerConfig = .{
+            .worker_id = i,
+            .seed = seed,
+            .runs = runs,
+            .start_idx = start_idx,
+        };
+
         const batch_args = .{
             &mutex_times,
             times_file,
             topology,
-            userparams,
-            config,
-            seed,
-            runs,
-            start_idx,
+            sim,
+            worker_config,
             run_dir,
-            i,
             skipjsonl,
         };
         futures[i] = try tio.concurrent(simulationBatch, batch_args);
@@ -216,17 +244,20 @@ fn launchWorkers(
     }
 }
 
+const WorkerConfig = struct {
+    worker_id: usize,
+    seed: u64,
+    runs: usize,
+    start_idx: usize,
+};
+
 fn simulationBatch(
     mutex_times: *Io.Mutex,
     times_file: Io.File,
     topology: *const Topology,
-    userparams: *const UserParams,
-    config: *const SimConfig,
-    seed: u64,
-    runs: usize,
-    start_idx: usize,
+    simctx: *const SimCtx,
+    config: WorkerConfig,
     run_dir: []const u8,
-    worker_id: usize,
     skipjsonl: bool,
 ) !void {
     var aa: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
@@ -252,63 +283,59 @@ fn simulationBatch(
     const stderr = &stderr_writer.interface;
 
     // per-worker copy of the state; reset() between runs, delete() at the end
-    var state: SimState = try .create(arena, gpa, &topology);
+    var state: SimState = try .create(arena, gpa, topology);
     defer state.delete(arena, gpa);
 
-    var prng: Random.DefaultPrng = .init(seed);
+    var prng: Random.DefaultPrng = .init(config.seed);
 
-    if (worker_id == 0) {
+    if (config.worker_id == 0) {
         // Dump the configuration
         var b: [std.fs.max_path_bytes]u8 = undefined;
         const path = try std.fmt.bufPrint(&b, "{s}/user_distributions.tsv", .{run_dir});
-        try state.dumpUsers(io, path);
+        try simctx.users.dump(io, path);
     }
 
     var times_buf: [256]u8 = undefined;
     var times_writer = times_file.writerStreaming(io, &times_buf);
     const times_w = &times_writer.interface;
 
-    for (0..runs) |i| {
-        const run_idx = start_idx + i;
+    for (0..config.runs) |i| {
+        const run_idx = config.start_idx + i;
 
-        const run_seed = seed +% std.hash.Wyhash.hash(0, std.mem.asBytes(&run_idx));
+        const run_seed = config.seed +% std.hash.Wyhash.hash(0, std.mem.asBytes(&run_idx));
         prng.seed(run_seed);
 
         const rng = prng.random();
 
         var elapsedTime: Io.Duration = undefined;
-        if (config.trace_to_file) {
+        if (simctx.global.trace_to_file) {
             elapsedTime = try runTracedSimulation(
                 io,
                 gpa,
                 arena,
                 rng,
-                config,
                 topology,
-                userparams,
+                simctx,
                 &state,
                 run_dir,
                 run_idx,
-                worker_id,
+                config,
                 skipjsonl,
                 stdout,
                 stderr,
             );
         } else {
             const startTime = Io.Timestamp.now(io, .cpu_thread);
-            _ = try simulation.simulate(gpa, arena, rng, config, topology, &state, undefined);
+            _ = try simulation.simulate(gpa, arena, rng, topology, simctx, &state, undefined);
             elapsedTime = startTime.untilNow(io, .cpu_thread);
         }
 
         try mutex_times.lock(io);
-        try times_w.print("{d} {d} {d}\n", .{ worker_id, run_idx, elapsedTime.toMilliseconds() });
+        try times_w.print("{d} {d} {d}\n", .{ config.worker_id, run_idx, elapsedTime.toMilliseconds() });
         try times_w.flush();
         mutex_times.unlock(io);
 
-        try stdout.print("[Batch {d} - {d}] - Execution time: {d} ms", .{ worker_id, run_idx, elapsedTime.toMilliseconds() });
-        if (state.poolFallbacks() > 0) {
-            try stdout.print(" | pool-fallbacks: {d}", .{state.poolFallbacks()});
-        }
+        try stdout.print("[Batch {d} - {d}] - Execution time: {d} ms", .{ config.worker_id, run_idx, elapsedTime.toMilliseconds() });
         try stdout.print("\n", .{});
         try stdout.flush();
 
@@ -323,13 +350,12 @@ fn runTracedSimulation(
     gpa: std.mem.Allocator,
     arena: std.mem.Allocator,
     rng: Random,
-    config: *const SimConfig,
     topology: *const Topology,
-    userparams: *const UserParams,
+    simctx: *const SimCtx,
     state: *SimState,
     run_dir: []const u8,
     run_idx: usize,
-    worker_id: usize,
+    config: WorkerConfig,
     skipjsonl: bool,
     stdout: *Io.Writer,
     stderr: *Io.Writer,
@@ -395,18 +421,18 @@ fn runTracedSimulation(
         gpa,
         arena,
         rng,
-        config,
         topology,
-        userparams,
+        simctx,
         state,
         t,
     ) catch |err| {
         switch (err) {
-            error.OutOfMemoryQueue => try stderr.print("fatal - batch {d} run {d}: event queue ran out of memory\n", .{ worker_id, run_idx }),
-            error.OutOfMemoryTimeline => try stderr.print("fatal - batch {d} run {d}: user timeline ran out of memory\n", .{ worker_id, run_idx }),
-            error.OutOfMemorySMAList => try stderr.print("fatal - batch {d} run {d}: post list ran out of memory\n", .{ worker_id, run_idx }),
-            error.OutOfMemoryPagedBitSet => try stderr.print("fatal - batch {d} run {d}: bit matrix ran out of memory\n", .{ worker_id, run_idx }),
-            error.WriteFailed => try stderr.print("fatal - batch {d} run {d}: trace write to disk failed\n", .{ worker_id, run_idx }),
+            error.OutOfMemoryQueue => try stderr.print("fatal - batch {d} run {d}: event queue ran out of memory\n", .{ config.worker_id, run_idx }),
+            error.OutOfMemoryTimeline => try stderr.print("fatal - batch {d} run {d}: user timeline ran out of memory\n", .{ config.worker_id, run_idx }),
+            error.OutOfMemorySMAList => try stderr.print("fatal - batch {d} run {d}: post list ran out of memory\n", .{ config.worker_id, run_idx }),
+            error.OutOfMemoryPagedBitSet => try stderr.print("fatal - batch {d} run {d}: bit matrix ran out of memory\n", .{ config.worker_id, run_idx }),
+            error.OutOfMemoryUserMap => try stderr.print("fatal - batch {d} run {d}: user post set ran out of memory\n", .{ config.worker_id, run_idx }),
+            error.WriteFailed => try stderr.print("fatal - batch {d} run {d}: trace write to disk failed\n", .{ config.worker_id, run_idx }),
         }
         try stderr.flush();
         std.process.exit(1);
@@ -452,8 +478,14 @@ pub fn parseAndValidateCmdArgs(iter: *std.process.Args.Iterator, stdout: *Io.Wri
         std.process.exit(0);
     }
 
-    if (std.mem.eql(u8, std.fs.path.extension(args.configfile), "json")) {
-        try stderr.print("The provided config file ({s}) does not have a 'json' extension\n", .{args.configfile});
+    if (!std.mem.eql(u8, std.fs.path.extension(args.paramsfile), ".json")) {
+        try stderr.print("The provided params file ({s}) does not have a 'json' extension\n", .{args.paramsfile});
+        try stderr.flush();
+        std.process.exit(1);
+    }
+
+    if (!std.mem.eql(u8, std.fs.path.extension(args.userparamsfile), ".json")) {
+        try stderr.print("The provided users file ({s}) does not have a 'json' extension\n", .{args.userparamsfile});
         try stderr.flush();
         std.process.exit(1);
     }
@@ -482,10 +514,10 @@ fn copyFile(io: Io, src_path: []const u8, dst_path: []const u8) !void {
     try writer.interface.flush();
 }
 
-fn createUsedConfig(io: Io, dir: []const u8, src_config_path: []const u8) !void {
+fn createUsedConfig(io: Io, dir: []const u8, src_path: []const u8, comptime dst_name: []const u8) !void {
     var buf: [std.fs.max_path_bytes]u8 = undefined;
-    const dst = try std.fmt.bufPrint(&buf, "{s}/used_config.json", .{dir});
-    try copyFile(io, src_config_path, dst);
+    const dst = try std.fmt.bufPrint(&buf, "{s}/" ++ dst_name, .{dir});
+    try copyFile(io, src_path, dst);
 }
 
 fn createExecutionTimes(io: Io, dir: []const u8) !Io.File {

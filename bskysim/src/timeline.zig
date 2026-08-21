@@ -1,4 +1,8 @@
 const std = @import("std");
+const Allocator = std.mem.Allocator;
+const Order = std.math.Order;
+
+const ds = @import("ds");
 
 /// Event to contain in the user own timeline. Contains the minimum information
 /// to get it transmitted everywhere

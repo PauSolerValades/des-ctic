@@ -11,9 +11,7 @@ const DiscDist = dist.DiscreteDistribution;
 
 const Categorical = dist.Categorical;
 
-const structs = @import("SimConfig.zig");
 const entities = @import("entities.zig");
-const Precision = structs.Precision;
 
 const User = entities.User;
 const Post = entities.Post;
@@ -29,7 +27,7 @@ pub const NetworkJson = struct {
 const ParsedUser = struct {
     id: u32,
     actions: []entities.Action,
-    policy: []Precision,
+    policy: []f32,
 };
 
 const ParsedPost = struct {
