@@ -8,12 +8,10 @@ const SimConfig = @import("SimConfig.zig");
 const simulation = @import("simulation.zig");
 const loader = @import("load-topology.zig");
 const entities = @import("entities.zig");
-const topo = @import("Topology.zig");
+const Topology = @import("Topology.zig");
 const SimState = @import("SimState.zig");
 const traces = @import("traces.zig");
-
-const Topology = topo;
-// const SimState = topo.SimState; // UNCOMMENT LATER
+const UserParams = @import("UserParams.zig");
 
 const Arg = argz.Argument;
 const Opt = argz.Option;
@@ -142,8 +140,8 @@ pub fn main(init: std.process.Init) !void {
     const rng = prng.random();
 
     const startTimeUsers = Io.Timestamp.now(init.io, .real);
-    var state: SimState = try .create(init.io, arena, init.gpa, rng, &topology, config.users);
-    defer state.delete(arena, init.gpa);
+    var userparams: UserParams = try .create(init.io, arena, rng, &topology, config.users);
+    defer userparams.delete(arena);
     const elapsedTimeUsers = startTimeUsers.untilNow(init.io, .real);
 
     try stdout.print("Time Elapsed Assigning Users: {d} ms\n", .{elapsedTimeUsers.toMilliseconds()});
@@ -153,7 +151,7 @@ pub fn main(init: std.process.Init) !void {
         gpa,
         times_file,
         &topology,
-        &state,
+        &userparams,
         &config,
         seed,
         output_job_dir,
@@ -168,7 +166,7 @@ fn launchWorkers(
     gpa: std.mem.Allocator,
     times_file: Io.File,
     topology: *const Topology,
-    state: *const SimState,
+    userparams: *const UserParams,
     config: *const SimConfig,
     seed: u64,
     run_dir: []const u8,
@@ -199,7 +197,7 @@ fn launchWorkers(
             &mutex_times,
             times_file,
             topology,
-            state,
+            userparams,
             config,
             seed,
             runs,
@@ -222,7 +220,7 @@ fn simulationBatch(
     mutex_times: *Io.Mutex,
     times_file: Io.File,
     topology: *const Topology,
-    state_template: *const SimState,
+    userparams: *const UserParams,
     config: *const SimConfig,
     seed: u64,
     runs: usize,
@@ -254,7 +252,7 @@ fn simulationBatch(
     const stderr = &stderr_writer.interface;
 
     // per-worker copy of the state; reset() between runs, delete() at the end
-    var state: SimState = try state_template.clone(arena, gpa);
+    var state: SimState = try .create(arena, gpa, &topology);
     defer state.delete(arena, gpa);
 
     var prng: Random.DefaultPrng = .init(seed);
@@ -287,6 +285,7 @@ fn simulationBatch(
                 rng,
                 config,
                 topology,
+                userparams,
                 &state,
                 run_dir,
                 run_idx,
@@ -326,6 +325,7 @@ fn runTracedSimulation(
     rng: Random,
     config: *const SimConfig,
     topology: *const Topology,
+    userparams: *const UserParams,
     state: *SimState,
     run_dir: []const u8,
     run_idx: usize,
@@ -397,6 +397,7 @@ fn runTracedSimulation(
         rng,
         config,
         topology,
+        userparams,
         state,
         t,
     ) catch |err| {

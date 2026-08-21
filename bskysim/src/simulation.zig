@@ -15,10 +15,10 @@ const Precision = @import("SimConfig.zig").Precision;
 const SimResults = @import("SimResult.zig");
 const entities = @import("entities.zig");
 const t = @import("traces.zig");
-const topo = @import("Topology.zig");
+const Topology = @import("Topology.zig");
+const UserParams = @import("UserParams.zig");
 const gen = @import("events.zig");
 
-const Topology = topo;
 const SimState = @import("SimState.zig");
 
 const ds_pkg = @import("ds");
@@ -82,7 +82,8 @@ fn propagatePost(gpa: Allocator, topology: *const Topology, state: *SimState, t_
     for (followers) |fid| {
         // Skip if follower already interacted with this post (liked/reposted).
         // This avoids useless heap insertions for posts that would be skipped later.
-        if (state.user_interact_post.isSet(fid, post_id)) continue;
+        if (state.users[fid].reposted_posts.get(post_id)) continue;
+        // if (state.user_interact_post.isSet(fid, post_id)) continue;
         // this is the backlog, propagation is not in the active timeline
         state.timelines[fid].getBackground().push(gpa, tl_event) catch return error.OutOfMemoryTimeline;
     }
@@ -102,8 +103,8 @@ fn stageOne(
 ) SimError!void {
 
     // We create an event per user to kickstart the user posts.
-    state.user_seen_post.ensureItemCapacity(arena, state.users.len) catch return error.OutOfMemoryPagedBitSet;
-    state.user_interact_post.ensureItemCapacity(arena, state.users.len) catch return error.OutOfMemoryPagedBitSet;
+    // state.user_seen_post.ensureItemCapacity(arena, state.users.len) catch return error.OutOfMemoryPagedBitSet;
+    // state.user_interact_post.ensureItemCapacity(arena, state.users.len) catch return error.OutOfMemoryPagedBitSet;
 
     for (0..state.users.len) |uid| {
         // we create a creation event
@@ -126,12 +127,13 @@ fn stageOne(
                 const new_post_id = metrics.post_count;
 
                 state.posts.append(arena, .{ .id = new_post_id, .author = current_uid }) catch return error.OutOfMemorySMAList;
-                state.user_seen_post.ensureItemCapacity(arena, new_post_id) catch return error.OutOfMemoryPagedBitSet;
-                state.user_interact_post.ensureItemCapacity(arena, new_post_id) catch return error.OutOfMemoryPagedBitSet;
+                // state.user_seen_post.ensureItemCapacity(arena, new_post_id) catch return error.OutOfMemoryPagedBitSet;
+                // state.user_interact_post.ensureItemCapacity(arena, new_post_id) catch return error.OutOfMemoryPagedBitSet;
 
                 // creator has seen and implicitly interacted with their own post
-                state.user_seen_post.set(current_uid, new_post_id);
-                state.user_interact_post.set(current_uid, new_post_id);
+                state.users[current_uid].seen_posts.putNoClobber(gpa, new_post_id);
+                state.users[current_uid].liked_posts.putNoClobber(gpa, new_post_id);
+                state.users[current_uid].reposted_posts.putNoClobber(gpa, new_post_id);
 
                 const propagate = gen.eventPropagate(rng, simconf, t_clock.*, current_uid, new_post_id, current_uid, metrics.generated_events);
                 queue.push(gpa, propagate) catch return error.OutOfMemoryQueue;
@@ -212,6 +214,7 @@ pub fn simulate(
     rng: Random,
     simconf: *const SimConfig,
     topology: *const Topology,
+    userparams: *const UserParams,
     state: *SimState,
     traces: TraceWriters,
 ) SimError!SimResults {
@@ -283,11 +286,13 @@ pub fn simulate(
                 const new_post_id = metrics.post_count;
 
                 user_num_posts[current_uid] += 1;
-                state.user_seen_post.ensureItemCapacity(arena, new_post_id) catch return error.OutOfMemoryPagedBitSet;
-                state.user_interact_post.ensureItemCapacity(arena, new_post_id) catch return error.OutOfMemoryPagedBitSet;
+                // state.user_seen_post.ensureItemCapacity(arena, new_post_id) catch return error.OutOfMemoryPagedBitSet;
+                // state.user_interact_post.ensureItemCapacity(arena, new_post_id) catch return error.OutOfMemoryPagedBitSet;
                 // creator has seen and implicitly interacted with their own post
-                state.user_seen_post.set(current_uid, new_post_id);
-                state.user_interact_post.set(current_uid, new_post_id);
+
+                state.users[current_uid].seen_posts.putNoClobber(gpa, new_post_id, new_post_id);
+                state.users[current_uid].liked_posts.putNoClobber(gpa, new_post_id, new_post_id);
+                state.users[current_uid].reposted_posts.putNoClobber(gpa, new_post_id, new_post_id);
 
                 const propagate = gen.eventPropagate(rng, simconf, t_clock, current_uid, new_post_id, current_uid, metrics.generated_events);
                 queue.push(gpa, propagate) catch return error.OutOfMemoryQueue;
@@ -369,7 +374,7 @@ pub fn simulate(
                     var post: ?TimelineEvent = null;
                     while (user_timeline.items.len > 0) {
                         const candidate = user_timeline.pop();
-                        if (!state.user_interact_post.isSet(current_uid, candidate.post_id)) {
+                        if (state.users[current_uid].get(candidate.post_id)) |_| {} else {
                             post = candidate;
                             break;
                         }
@@ -381,13 +386,13 @@ pub fn simulate(
                         try traces.action.writeAll(bytes);
 
                         // Always mark as seen (diagnostic: counts every exposure)
-                        state.user_seen_post.set(current_uid, p.post_id);
+                        state.users[current_uid].seen_posts.putNoClobber(gpa, p.post_id, p.post_id);
                         metrics.impressions += 1;
 
                         switch (act) {
                             .repost => {
                                 // desensitized: user propagated, can't interact with this post again
-                                state.user_interact_post.set(current_uid, p.post_id);
+                                state.users[current_uid].reposted_post.PutNoClobber(p.post_id);
 
                                 const propagate = gen.eventPropagate(rng, simconf, t_clock, current_uid, p.post_id, current_uid, metrics.generated_events);
                                 queue.push(gpa, propagate) catch return error.OutOfMemoryQueue;
@@ -395,8 +400,8 @@ pub fn simulate(
                                 metrics.reposts += 1;
                             },
                             .like => {
+                                state.users[current_uid].liked_post.PutNoClobber(p.post_id);
                                 // desensitized: user consumed and acknowledged (platform prevents double-liking)
-                                state.user_interact_post.set(current_uid, p.post_id);
                                 metrics.likes += 1;
                             },
                             .ignore => {
