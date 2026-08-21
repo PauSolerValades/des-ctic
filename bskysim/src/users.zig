@@ -45,10 +45,6 @@ pub const UserConf = struct {
     probability: f32,
 };
 
-users: MultiArrayList(UserParams),
-
-const Self = @This();
-
 const Field = blk: {
     const fields = @typeInfo(UserConf).@"struct".fields;
     var names: [fields.len][]const u8 = undefined;
@@ -60,7 +56,7 @@ const Field = blk: {
     break :blk @Enum(u8, .exhaustive, &names, &vals);
 };
 
-pub fn create(io: Io, gpa: Allocator, rng: Random, num_users: usize, userparams_file: []const u8, stderr: *Io.Writer) !Self {
+pub fn create(io: Io, gpa: Allocator, rng: Random, num_users: usize, userparams_file: []const u8, stderr: *Io.Writer) !MultiArrayList(UserParams) {
     const content = try Io.Dir.cwd().readFileAlloc(io, userparams_file, gpa, .unlimited);
     defer gpa.free(content);
 
@@ -68,9 +64,7 @@ pub fn create(io: Io, gpa: Allocator, rng: Random, num_users: usize, userparams_
 
     try checkValidity(params_pair, io, stderr);
 
-    const users = try configToParams(io, gpa, rng, num_users, params_pair);
-
-    return .{ .users = users };
+    return configToParams(io, gpa, rng, num_users, params_pair);
 }
 
 pub fn parseUsers(gpa: Allocator, content: []const u8, stderr: *Io.Writer) (ParseError || JsonScannerError || error{ InvalidCharacter, WriteFailed })![]UserConf {
@@ -280,9 +274,9 @@ pub fn checkValidity(confs: []const UserConf, io: Io, stderr: *Io.Writer) (error
     if (!std.math.approxEqRel(f32, acc_prob, 1.0, 0.001)) return error.ProbabilityNotOne;
 }
 
-pub fn dump(self: *const Self, io: Io, path: []const u8) !void {
-    const session_duration_slice = self.users.items(.session_duration);
-    const inter_session_slice = self.users.items(.inter_session_time);
+pub fn dump(users: *const MultiArrayList(UserParams), io: Io, path: []const u8) !void {
+    const session_duration_slice = users.items(.session_duration);
+    const inter_session_slice = users.items(.inter_session_time);
 
     const dist_file = try Io.Dir.cwd().createFile(io, path, .{ .truncate = true });
     defer dist_file.close(io);
@@ -293,7 +287,7 @@ pub fn dump(self: *const Self, io: Io, path: []const u8) !void {
 
     try userdist.writeAll("session_duration inter_session_time\n");
 
-    for (0..self.users.len) |i| {
+    for (0..users.len) |i| {
         try session_duration_slice[i].format(userdist);
         try userdist.writeByte(' ');
         try inter_session_slice[i].format(userdist);
@@ -302,15 +296,11 @@ pub fn dump(self: *const Self, io: Io, path: []const u8) !void {
     try userdist.flush();
 }
 
-pub fn delete(self: *Self, arena: Allocator) void {
-    self.users.deinit(arena);
-}
-
 pub fn format(
-    self: *const @This(),
+    users: *const MultiArrayList(UserParams),
     writer: *std.Io.Writer,
 ) !void {
-    _ = self;
+    _ = users;
     try writer.writeAll("\n");
     try writer.writeAll("+--------------------------+\n");
     try writer.print("| USER SAMPLING STRATEGY  |\n", .{});

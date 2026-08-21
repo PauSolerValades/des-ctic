@@ -1,4 +1,4 @@
-/// SimConfig: Input parameters of the simulation.
+/// GlobalParams: global input parameters of the simulation.
 /// They are the following:
 /// - seed: control randomness
 /// - horizion: maximum timestamp of the simulation

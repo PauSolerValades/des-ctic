@@ -10,7 +10,6 @@ const NNContDist = stats.NonNegativeContinuousDistribution;
 const ContDist = stats.ContinuousDistribution;
 const DiscDist = stats.DiscreteDistribution;
 
-const UserConf = @import("../SimUsers.zig").UserConf;
 const DistTag = std.meta.Tag(NNContDist(f32));
 const Action = @import("../entities.zig").Action;
 
@@ -200,65 +199,3 @@ pub fn readDistTag(scanner: *Scanner, stderr: *Io.Writer) (ParseError || JsonSca
     };
 }
 
-// const Field = blk: {
-//     const fields = @typeInfo(UserConf).@"struct".fields;
-//     var names: [fields.len][]const u8 = undefined;
-//     var vals: [fields.len]u8 = undefined;
-//     for (fields, 0..) |f, i| {
-//         names[i] = f.name;
-//         vals[i] = i;
-//     }
-//     break :blk @Enum(u8, .exhaustive, &names, &vals);
-// };
-
-// moved to UserParams.zig, left here just in case
-// pub fn parseUsers(gpa: Allocator, scanner: *Scanner, stderr: *Io.Writer) (ParseError || JsonScannerError || error{ InvalidCharacter, WriteFailed })![]UserConf {
-//     if (try scanner.next() != Token.array_begin) return error.UnexpectedToken;
-
-//     var users: ArrayList(UserConf) = .empty;
-//     defer users.deinit(gpa);
-
-//     var index: usize = 1;
-//     while (true) {
-//         const tok = try scanner.next();
-//         if (tok == Token.array_end) break;
-//         if (tok != Token.object_begin) return error.UnexpectedToken;
-
-//         var user: UserConf = undefined;
-//         const num_fields: usize = @typeInfo(Field).@"enum".fields.len;
-//         var have: std.StaticBitSet(num_fields) = .empty;
-
-//         while (true) {
-//             const key = try scanner.next();
-//             if (key == Token.object_end) break;
-//             if (key != Token.string) return error.UnexpectedToken;
-
-//             const field = std.meta.stringToEnum(Field, key.string) orelse {
-//                 try stderr.print("Parameter '{s}' is not an valid user parameter\n", .{key.string});
-//                 return error.UnknownParameter;
-//             };
-//             have.set(@intFromEnum(field));
-
-//             switch (field) {
-//                 .session_duration => user.session_duration = try readDistTag(scanner, stderr),
-//                 .inter_session_time => user.inter_session_time = try readDistTag(scanner, stderr),
-//                 .session_params_path => user.session_params_path = try readKeyString(gpa, scanner),
-//                 .gap_params_path => user.gap_params_path = try readKeyString(gpa, scanner),
-//                 .ecdf_post_creation_path => user.ecdf_post_creation_path = try readKeyString(gpa, scanner),
-//                 .ecdf_offset_creation_path => user.ecdf_offset_creation_path = try readKeyString(gpa, scanner),
-//                 .probability => user.probability = try readKeyNumber(scanner, f32),
-//             }
-//         }
-
-//         if (have.count() != num_fields) {
-//             inline for (@typeInfo(Field).@"enum".fields) |f| {
-//                 if (!have.isSet(f.value)) try stderr.print("missing field '{s}' in item {d}\n", .{ f.name, index });
-//             }
-//             return error.MissingField;
-//         }
-//         try users.append(gpa, user);
-//         index += 1;
-//     }
-
-//     return users.toOwnedSlice(gpa);
-// }

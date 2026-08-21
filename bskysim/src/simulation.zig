@@ -10,12 +10,12 @@ const DaryHeap = @import("ds").DaryHeap;
 
 const dist = @import("distributions");
 
-const SimParams = @import("SimParams.zig");
+const GlobalParams = @import("GlobalParams.zig");
 const SimResults = @import("SimResult.zig");
 const entities = @import("entities.zig");
 const t = @import("traces.zig");
 const Topology = @import("Topology.zig");
-const SimUsers = @import("SimUsers.zig");
+const users = @import("users.zig");
 const gen = @import("events.zig");
 
 const SimState = @import("SimState.zig");
@@ -62,9 +62,9 @@ pub const SimMetrics = struct {
     max_duration_ends: u64 = 0,
 };
 
-pub const SimCtx = struct {
-    global: SimParams,
-    users: SimUsers,
+pub const SimParams = struct {
+    global: GlobalParams,
+    users: std.MultiArrayList(users.UserParams),
 };
 
 const Unif = dist.Uniform(f32);
@@ -99,7 +99,7 @@ fn stageOne(
     arena: Allocator,
     rng: Random,
     topology: *const Topology,
-    params: *const SimCtx,
+    params: *const SimParams,
     state: *SimState,
     queue: *EventQueue,
     metrics: *SimMetrics,
@@ -170,7 +170,7 @@ fn stageOne(
 pub fn initSessions(
     gpa: Allocator,
     rng: Random,
-    params: *const SimCtx,
+    params: *const SimParams,
     state: *SimState,
     queue: *EventQueue,
     metrics: *SimMetrics,
@@ -217,7 +217,7 @@ pub fn simulate(
     arena: Allocator,
     rng: Random,
     topology: *const Topology,
-    simctx: *const SimCtx,
+    simctx: *const SimParams,
     state: *SimState,
     traces: TraceWriters,
 ) SimError!SimResults {
@@ -230,7 +230,9 @@ pub fn simulate(
     defer queue.deinit(gpa);
 
     // generation on init
-    try stageOne(gpa, arena, rng, topology, simctx, state, &queue, &metrics, &t_clock, traces);
+    if (simctx.global.warmup_time != 0) {
+        try stageOne(gpa, arena, rng, topology, simctx, state, &queue, &metrics, &t_clock, traces);
+    }
     // queue.clearRetainingCapacity();
 
     // Warmup propagated all posts into getBackground(). Swap so they're

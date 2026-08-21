@@ -4,12 +4,12 @@ const Allocator = std.mem.Allocator;
 const Random = std.Random;
 
 const entities = @import("entities.zig");
-const SimCtx = @import("simulation.zig").SimCtx;
+const SimParams = @import("simulation.zig").SimParams;
 
 const Event = entities.Event;
 const Action = entities.Action;
 
-pub fn eventAction(rng: Random, params: *const SimCtx, t_clock: f64, user_id: u32, user_session_gen: u32, generated_events: u64) Event {
+pub fn eventAction(rng: Random, params: *const SimParams, t_clock: f64, user_id: u32, user_session_gen: u32, generated_events: u64) Event {
     const action: Action = params.global.user_policy.sample(rng);
 
     const event_time = params.global.user_inter_action.sample(rng);
@@ -26,9 +26,9 @@ pub fn eventAction(rng: Random, params: *const SimCtx, t_clock: f64, user_id: u3
     return event;
 }
 
-pub fn eventSessionStart(rng: Random, params: *const SimCtx, t_clock: f64, user_id: u32, session_id: u32, generated_events: u64) Event {
+pub fn eventSessionStart(rng: Random, params: *const SimParams, t_clock: f64, user_id: u32, session_id: u32, generated_events: u64) Event {
     // when will the user go online
-    const offline_duration = params.users.users.items(.inter_session_time)[user_id].sample(rng);
+    const offline_duration = params.users.items(.inter_session_time)[user_id].sample(rng);
     const event_start = Event{
         .time = t_clock + offline_duration,
         .type = .{ .session = .start },
@@ -39,9 +39,9 @@ pub fn eventSessionStart(rng: Random, params: *const SimCtx, t_clock: f64, user_
     return event_start;
 }
 
-pub fn eventSessionEnd(rng: Random, params: *const SimCtx, t_clock: f64, user_id: u32, session_id: u32, generated_events: u64) Event {
+pub fn eventSessionEnd(rng: Random, params: *const SimParams, t_clock: f64, user_id: u32, session_id: u32, generated_events: u64) Event {
     // when will the user go offline
-    const duration = params.users.users.items(.session_duration)[user_id].sample(rng);
+    const duration = params.users.items(.session_duration)[user_id].sample(rng);
     const event_end = Event{
         .time = t_clock + duration,
         .type = .{ .session = .end },
@@ -52,10 +52,10 @@ pub fn eventSessionEnd(rng: Random, params: *const SimCtx, t_clock: f64, user_id
     return event_end;
 }
 
-pub fn eventCreateFirstPost(rng: Random, params: *const SimCtx, t_clock: f64, user_id: u32, session_id: u32, generated_events: u64) Event {
+pub fn eventCreateFirstPost(rng: Random, params: *const SimParams, t_clock: f64, user_id: u32, session_id: u32, generated_events: u64) Event {
     // Schedule the next post creation for this user
     const creation_delay = params.global.creation_delay.sample(rng);
-    const duration_between_creation = params.users.users.items(.offset_creation_time)[user_id].sample(rng);
+    const duration_between_creation = params.users.items(.offset_creation_time)[user_id].sample(rng);
 
     const new_post = Event{
         .time = t_clock + duration_between_creation + creation_delay,
@@ -67,10 +67,10 @@ pub fn eventCreateFirstPost(rng: Random, params: *const SimCtx, t_clock: f64, us
     return new_post;
 }
 
-pub fn eventCreatePost(rng: Random, params: *const SimCtx, t_clock: f64, user_id: u32, session_id: u32, generated_events: u64) Event {
+pub fn eventCreatePost(rng: Random, params: *const SimParams, t_clock: f64, user_id: u32, session_id: u32, generated_events: u64) Event {
     // Schedule the next post creation for this user
     const creation_delay = params.global.creation_delay.sample(rng);
-    const duration_between_creation = params.users.users.items(.inter_creation_time)[user_id].sample(rng);
+    const duration_between_creation = params.users.items(.inter_creation_time)[user_id].sample(rng);
 
     const new_post = Event{
         .time = t_clock + duration_between_creation + creation_delay,
@@ -82,7 +82,7 @@ pub fn eventCreatePost(rng: Random, params: *const SimCtx, t_clock: f64, user_id
     return new_post;
 }
 
-pub fn eventPropagate(rng: Random, params: *const SimCtx, t_clock: f64, user_id: u32, post_id: u32, parent_id: u32, generated_events: u64) Event {
+pub fn eventPropagate(rng: Random, params: *const SimParams, t_clock: f64, user_id: u32, post_id: u32, parent_id: u32, generated_events: u64) Event {
     // Sample the delay ONCE for the broadcast
     const delay = params.global.propagation_delay.sample(rng);
 
