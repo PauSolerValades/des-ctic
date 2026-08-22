@@ -55,11 +55,11 @@ pub fn main(init: std.process.Init) !void {
     var iter = init.minimal.args.iterate();
     const args = parseAndValidateCmdArgs(&iter, stdout, stderr) catch std.process.exit(1);
 
-    var arena_json: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
-    const data_alloc = arena_json.allocator();
+    var load_data_arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    const tmpalloc = load_data_arena.allocator();
 
     const startTimeLoadConfig = Io.Timestamp.now(init.io, .real);
-    const config: GlobalParams = GlobalParams.create(init.io, gpa, args.paramsfile, stderr) catch |err| {
+    const config: GlobalParams = GlobalParams.create(init.io, arena, args.paramsfile, stderr) catch |err| {
         switch (err) {
             error.OutOfMemory => try stderr.writeAll("Out of memory while parsing config.\n"),
             error.WriteFailed => {}, // stderr already dead, nothing to do, just crash
@@ -99,7 +99,7 @@ pub fn main(init: std.process.Init) !void {
     try stdout.flush();
 
     const startTimeLoadData = Io.Timestamp.now(init.io, .real);
-    const sampled_topology = try loader.BinaryGraph.create(init.io, data_alloc, args.datafile);
+    const sampled_topology = try loader.BinaryGraph.create(init.io, tmpalloc, args.datafile);
     const elapsedTimeLoadData = startTimeLoadData.untilNow(init.io, .real);
 
     try stdout.print("Time Elapsed Loading Data: {d} ms\n", .{elapsedTimeLoadData.toMilliseconds()});
@@ -111,8 +111,8 @@ pub fn main(init: std.process.Init) !void {
     const elapsedTimeWireData = startTimeWireData.untilNow(init.io, .real);
 
     var samp_top_var = sampled_topology;
-    samp_top_var.delete(data_alloc);
-    arena_json.deinit();
+    samp_top_var.delete(tmpalloc);
+    load_data_arena.deinit();
 
     try stdout.print("Time Elapsed Wiring Topology: {d} ms\n", .{elapsedTimeWireData.toMilliseconds()});
     try stdout.flush();
@@ -121,10 +121,7 @@ pub fn main(init: std.process.Init) !void {
     const output_job_dir = if (args.outputdir) |od| od else blk: {
         break :blk try std.fmt.bufPrint(&output_buff, "./traces/{d}", .{Io.Timestamp.now(init.io, .real).toMilliseconds()});
     };
-    Io.Dir.cwd().createDirPath(
-        init.io,
-        output_job_dir,
-    ) catch |err| switch (err) {
+    Io.Dir.cwd().createDirPath(init.io, output_job_dir) catch |err| switch (err) {
         error.PathAlreadyExists => {},
         else => return err,
     };
@@ -312,7 +309,6 @@ fn simulationBatch(
             elapsedTime = try runTracedSimulation(
                 io,
                 gpa,
-                arena,
                 rng,
                 topology,
                 simparams,
@@ -326,7 +322,7 @@ fn simulationBatch(
             );
         } else {
             const startTime = Io.Timestamp.now(io, .cpu_thread);
-            _ = try simulation.simulate(gpa, arena, rng, topology, simparams, &state, undefined);
+            _ = try simulation.simulate(gpa, rng, topology, simparams, &state, undefined);
             elapsedTime = startTime.untilNow(io, .cpu_thread);
         }
 
@@ -348,7 +344,6 @@ fn simulationBatch(
 fn runTracedSimulation(
     io: Io,
     gpa: std.mem.Allocator,
-    arena: std.mem.Allocator,
     rng: Random,
     topology: *const Topology,
     simparams: *const SimParams,
@@ -419,7 +414,6 @@ fn runTracedSimulation(
     };
     const result = simulation.simulate(
         gpa,
-        arena,
         rng,
         topology,
         simparams,

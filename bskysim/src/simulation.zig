@@ -71,12 +71,14 @@ pub const SimParams = struct {
 const Unif = dist.Uniform(f32);
 
 fn propagatePost(gpa: Allocator, topology: *const Topology, state: *SimState, t_clock: f64, user_id: u32, post_id: u32, parent_id: u32) SimError!void {
+    assert(user_id <= topology.nodes);
     const start_idx = topology.start[user_id];
     const end_idx = if (user_id + 1 < state.users.len)
         topology.start[user_id + 1]
     else
         @as(u32, @intCast(topology.csr.len));
     const count = end_idx - start_idx;
+    assert(start_idx + count <= topology.nodes);
     const followers = topology.csr[start_idx .. start_idx + count];
 
     const tl_event = TimelineEvent{
@@ -97,7 +99,6 @@ fn propagatePost(gpa: Allocator, topology: *const Topology, state: *SimState, t_
 
 fn stageOne(
     gpa: Allocator,
-    arena: Allocator,
     rng: Random,
     topology: *const Topology,
     params: *const SimParams,
@@ -206,7 +207,6 @@ pub fn initSessions(
 
 pub fn simulate(
     gpa: Allocator,
-    arena: Allocator,
     rng: Random,
     topology: *const Topology,
     simctx: *const SimParams,
@@ -223,7 +223,7 @@ pub fn simulate(
 
     // generation on init
     if (simctx.global.warmup_time != 0) {
-        try stageOne(gpa, arena, rng, topology, simctx, state, &queue, &metrics, &t_clock, traces);
+        try stageOne(gpa, rng, topology, simctx, state, &queue, &metrics, &t_clock, traces);
     }
     // queue.clearRetainingCapacity();
 

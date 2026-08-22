@@ -57,10 +57,14 @@ const Field = blk: {
 };
 
 pub fn create(io: Io, gpa: Allocator, rng: Random, num_users: usize, userparams_file: []const u8, stderr: *Io.Writer) !MultiArrayList(UserParams) {
-    const content = try Io.Dir.cwd().readFileAlloc(io, userparams_file, gpa, .unlimited);
+    var load_data_arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    const tmpalloc = load_data_arena.allocator();
+    defer load_data_arena.deinit();
+
+    const content = try Io.Dir.cwd().readFileAlloc(io, userparams_file, tmpalloc, .unlimited);
     defer gpa.free(content);
 
-    const params_pair: []UserConf = try parseUsers(gpa, content, stderr);
+    const params_pair: []UserConf = try parseUsers(tmpalloc, content, stderr);
 
     try checkValidity(params_pair, io, stderr);
 
