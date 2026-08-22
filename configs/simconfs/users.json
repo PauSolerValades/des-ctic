@@ -1,0 +1,137 @@
+[
+  {
+    "session_duration": "exponential",
+    "inter_session_time": "weibull",
+    "ecdf_post_creation_path": "bskysim/ecdfs/inter_creation_time/gaps/within_ecdf__expon__weibull_min.tsv",
+    "ecdf_offset_creation_path": "bskysim/ecdfs/inter_creation_time/offsets/offset_ecdf__expon__weibull_min.tsv",
+    "probability": 0.162,
+    "session_params_path": "bskysim/ecdfs/parameters/expon__weibull_min/session_expon.tsv",
+    "gap_params_path": "bskysim/ecdfs/parameters/expon__weibull_min/gap_weibull_min.tsv"
+  },
+  {
+    "session_duration": "exponential",
+    "inter_session_time": "lognormal",
+    "ecdf_post_creation_path": "bskysim/ecdfs/inter_creation_time/gaps/within_ecdf__expon__lognorm.tsv",
+    "ecdf_offset_creation_path": "bskysim/ecdfs/inter_creation_time/offsets/offset_ecdf__expon__lognorm.tsv",
+    "probability": 0.081,
+    "session_params_path": "bskysim/ecdfs/parameters/expon__lognorm/session_expon.tsv",
+    "gap_params_path": "bskysim/ecdfs/parameters/expon__lognorm/gap_lognorm.tsv"
+  },
+  {
+    "session_duration": "exponential",
+    "inter_session_time": "gpareto",
+    "ecdf_post_creation_path": "bskysim/ecdfs/inter_creation_time/gaps/within_ecdf__expon__power_tail.tsv",
+    "ecdf_offset_creation_path": "bskysim/ecdfs/inter_creation_time/offsets/offset_ecdf__expon__power_tail.tsv",
+    "probability": 0.036,
+    "session_params_path": "bskysim/ecdfs/parameters/expon__pareto/session_expon.tsv",
+    "gap_params_path": "bskysim/ecdfs/parameters/expon__pareto/gap_pareto.tsv"
+  },
+  {
+    "session_duration": "weibull",
+    "inter_session_time": "weibull",
+    "ecdf_post_creation_path": "bskysim/ecdfs/inter_creation_time/gaps/within_ecdf__weibull_min__weibull_min.tsv",
+    "ecdf_offset_creation_path": "bskysim/ecdfs/inter_creation_time/offsets/offset_ecdf__weibull_min__weibull_min.tsv",
+    "probability": 0.1,
+    "session_params_path": "bskysim/ecdfs/parameters/weibull_min__weibull_min/session_weibull_min.tsv",
+    "gap_params_path": "bskysim/ecdfs/parameters/weibull_min__weibull_min/gap_weibull_min.tsv"
+  },
+  {
+    "session_duration": "weibull",
+    "inter_session_time": "lognormal",
+    "ecdf_post_creation_path": "bskysim/ecdfs/inter_creation_time/gaps/within_ecdf__weibull_min__lognorm.tsv",
+    "ecdf_offset_creation_path": "bskysim/ecdfs/inter_creation_time/offsets/offset_ecdf__weibull_min__lognorm.tsv",
+    "probability": 0.087,
+    "session_params_path": "bskysim/ecdfs/parameters/weibull_min__lognorm/session_weibull_min.tsv",
+    "gap_params_path": "bskysim/ecdfs/parameters/weibull_min__lognorm/gap_lognorm.tsv"
+  },
+  {
+    "session_duration": "weibull",
+    "inter_session_time": "gpareto",
+    "ecdf_post_creation_path": "bskysim/ecdfs/inter_creation_time/gaps/within_ecdf__weibull_min__power_tail.tsv",
+    "ecdf_offset_creation_path": "bskysim/ecdfs/inter_creation_time/offsets/offset_ecdf__weibull_min__power_tail.tsv",
+    "probability": 0.056,
+    "session_params_path": "bskysim/ecdfs/parameters/weibull_min__pareto/session_weibull_min.tsv",
+    "gap_params_path": "bskysim/ecdfs/parameters/weibull_min__pareto/gap_pareto.tsv"
+  },
+  {
+    "session_duration": "gamma",
+    "inter_session_time": "weibull",
+    "ecdf_post_creation_path": "bskysim/ecdfs/inter_creation_time/gaps/within_ecdf__gamma__weibull_min.tsv",
+    "ecdf_offset_creation_path": "bskysim/ecdfs/inter_creation_time/offsets/offset_ecdf__gamma__weibull_min.tsv",
+    "probability": 0.083,
+    "session_params_path": "bskysim/ecdfs/parameters/gamma__weibull_min/session_gamma.tsv",
+    "gap_params_path": "bskysim/ecdfs/parameters/gamma__weibull_min/gap_weibull_min.tsv"
+  },
+  {
+    "session_duration": "gamma",
+    "inter_session_time": "lognormal",
+    "ecdf_post_creation_path": "bskysim/ecdfs/inter_creation_time/gaps/within_ecdf__gamma__lognorm.tsv",
+    "ecdf_offset_creation_path": "bskysim/ecdfs/inter_creation_time/offsets/offset_ecdf__gamma__lognorm.tsv",
+    "probability": 0.061,
+    "session_params_path": "bskysim/ecdfs/parameters/gamma__lognorm/session_gamma.tsv",
+    "gap_params_path": "bskysim/ecdfs/parameters/gamma__lognorm/gap_lognorm.tsv"
+  },
+  {
+    "session_duration": "gamma",
+    "inter_session_time": "gpareto",
+    "ecdf_post_creation_path": "bskysim/ecdfs/inter_creation_time/gaps/within_ecdf__gamma__power_tail.tsv",
+    "ecdf_offset_creation_path": "bskysim/ecdfs/inter_creation_time/offsets/offset_ecdf__gamma__power_tail.tsv",
+    "probability": 0.037,
+    "session_params_path": "bskysim/ecdfs/parameters/gamma__pareto/session_gamma.tsv",
+    "gap_params_path": "bskysim/ecdfs/parameters/gamma__pareto/gap_pareto.tsv"
+  },
+  {
+    "session_duration": "lognormal",
+    "inter_session_time": "weibull",
+    "ecdf_post_creation_path": "bskysim/ecdfs/inter_creation_time/gaps/within_ecdf__lognorm__weibull_min.tsv",
+    "ecdf_offset_creation_path": "bskysim/ecdfs/inter_creation_time/offsets/offset_ecdf__lognorm__weibull_min.tsv",
+    "probability": 0.071,
+    "session_params_path": "bskysim/ecdfs/parameters/lognorm__weibull_min/session_lognorm.tsv",
+    "gap_params_path": "bskysim/ecdfs/parameters/lognorm__weibull_min/gap_weibull_min.tsv"
+  },
+  {
+    "session_duration": "lognormal",
+    "inter_session_time": "lognormal",
+    "ecdf_post_creation_path": "bskysim/ecdfs/inter_creation_time/gaps/within_ecdf__lognorm__lognorm.tsv",
+    "ecdf_offset_creation_path": "bskysim/ecdfs/inter_creation_time/offsets/offset_ecdf__lognorm__lognorm.tsv",
+    "probability": 0.044,
+    "session_params_path": "bskysim/ecdfs/parameters/lognorm__lognorm/session_lognorm.tsv",
+    "gap_params_path": "bskysim/ecdfs/parameters/lognorm__lognorm/gap_lognorm.tsv"
+  },
+  {
+    "session_duration": "lognormal",
+    "inter_session_time": "gpareto",
+    "ecdf_post_creation_path": "bskysim/ecdfs/inter_creation_time/gaps/within_ecdf__lognorm__power_tail.tsv",
+    "ecdf_offset_creation_path": "bskysim/ecdfs/inter_creation_time/offsets/offset_ecdf__lognorm__power_tail.tsv",
+    "probability": 0.034,
+    "session_params_path": "bskysim/ecdfs/parameters/lognorm__pareto/session_lognorm.tsv",
+    "gap_params_path": "bskysim/ecdfs/parameters/lognorm__pareto/gap_pareto.tsv"
+  },
+  {
+    "session_duration": "gpareto",
+    "inter_session_time": "weibull",
+    "ecdf_post_creation_path": "bskysim/ecdfs/inter_creation_time/gaps/within_ecdf__power_tail__weibull_min.tsv",
+    "ecdf_offset_creation_path": "bskysim/ecdfs/inter_creation_time/offsets/offset_ecdf__power_tail__weibull_min.tsv",
+    "probability": 0.075,
+    "session_params_path": "bskysim/ecdfs/parameters/pareto__weibull_min/session_pareto.tsv",
+    "gap_params_path": "bskysim/ecdfs/parameters/pareto__weibull_min/gap_weibull_min.tsv"
+  },
+  {
+    "session_duration": "gpareto",
+    "inter_session_time": "lognormal",
+    "ecdf_post_creation_path": "bskysim/ecdfs/inter_creation_time/gaps/within_ecdf__power_tail__lognorm.tsv",
+    "ecdf_offset_creation_path": "bskysim/ecdfs/inter_creation_time/offsets/offset_ecdf__power_tail__lognorm.tsv",
+    "probability": 0.045,
+    "session_params_path": "bskysim/ecdfs/parameters/pareto__lognorm/session_pareto.tsv",
+    "gap_params_path": "bskysim/ecdfs/parameters/pareto__lognorm/gap_lognorm.tsv"
+  },
+  {
+    "session_duration": "gpareto",
+    "inter_session_time": "gpareto",
+    "ecdf_post_creation_path": "bskysim/ecdfs/inter_creation_time/gaps/within_ecdf__power_tail__power_tail.tsv",
+    "ecdf_offset_creation_path": "bskysim/ecdfs/inter_creation_time/offsets/offset_ecdf__power_tail__power_tail.tsv",
+    "probability": 0.028,
+    "session_params_path": "bskysim/ecdfs/parameters/pareto__pareto/session_pareto.tsv",
+    "gap_params_path": "bskysim/ecdfs/parameters/pareto__pareto/gap_pareto.tsv"
+  }
+]

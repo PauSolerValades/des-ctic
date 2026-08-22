@@ -28,7 +28,8 @@ pub fn eventAction(rng: Random, params: *const SimParams, t_clock: f64, user_id:
 
 pub fn eventSessionStart(rng: Random, params: *const SimParams, t_clock: f64, user_id: u32, session_id: u32, generated_events: u64) Event {
     // when will the user go online
-    const offline_duration = params.users.items(.inter_session_time)[user_id].sample(rng);
+    // gaps are fitted on (gap - gap_shift), so the shift is reapplied here
+    const offline_duration = params.users.items(.inter_session_time)[user_id].sample(rng) + params.global.gap_shift;
     const event_start = Event{
         .time = t_clock + offline_duration,
         .type = .{ .session = .start },

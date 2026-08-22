@@ -7,6 +7,7 @@ const SimulationConfig = struct {
     output_dir: ?[]const u8,
     config_file: []const u8,
     data_file: []const u8,
+    userparams_file: []const u8,
 };
 
 const CascadesConfig = struct {
@@ -125,7 +126,7 @@ fn simulationArgs(b: *Build, c: *const SimulationConfig) ![]const []const u8 {
     if (c.workers) |w| try args.append(b.allocator, b.fmt("-w{d}", .{w}));
     if (c.runs) |n| try args.append(b.allocator, b.fmt("-n{d}", .{n}));
     if (c.output_dir) |o| try args.appendSlice(b.allocator, &.{ "--outputdir", o });
-    try args.appendSlice(b.allocator, &.{ c.data_file, c.config_file });
+    try args.appendSlice(b.allocator, &.{ c.data_file, c.config_file, c.userparams_file });
     return args.items;
 }
 

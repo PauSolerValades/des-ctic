@@ -1,0 +1,12 @@
+{
+  "simulation": {
+    "workers": 1,
+    "runs": 1,
+    "output_dir": "steps/stability/traces/1M/w10K-h55K-r100",
+    "data_file": "data/monotonic/1M_monotonic.bin",
+    "config_file": "configs/simconfs/stability-expermient/w10K-h55K-r100.json",
+    "userparams_file": "configs/simconfs/users.json"
+  },
+  "cascade": null,
+  "dataset": null
+}

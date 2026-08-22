@@ -10,6 +10,10 @@
 /// - interaction_delay: time between a user initiating the action and actually performing the action
 /// - creation_delay: time between a user deciding to create the post and the actual post being created
 /// - offline_startup_ratio: which proportion of the users start in vacation
+/// - gap_shift: constant added to every sampled inter-session gap. The gap
+///   distributions are fitted on (gap - eps) after session clustering with
+///   DBSCAN eps=300, so the shift must be reapplied here. Required so the
+///   user is always aware that gaps may be shifted.
 /// - trace_to_file: should the simulation write the traces?
 const std = @import("std");
 
@@ -73,6 +77,7 @@ interaction_delay: NNContDist(f32), // time between
 creation_delay: NNContDist(f32),
 // session configuration
 offline_startup_ratio: f32, // which proportion of the users start on vacation
+gap_shift: f64, // added to every sampled inter-session gap (see header)
 trace_to_file: bool,
 
 /// Opens the json file and loads the distributions in memory
@@ -113,6 +118,7 @@ pub fn create(io: Io, gpa: Allocator, config_file: []const u8, stderr: *Io.Write
             .interaction_delay => config.interaction_delay = try parse.parseNonNegativeContinuousDist(&scanner, stderr, "interaction_delay"),
             .creation_delay => config.creation_delay = try parse.parseNonNegativeContinuousDist(&scanner, stderr, "creation_delay"),
             .offline_startup_ratio => config.offline_startup_ratio = try readKeyNumber(&scanner, f32),
+            .gap_shift => config.gap_shift = try readKeyNumber(&scanner, f64),
             .trace_to_file => config.trace_to_file = try readKeyBool(&scanner),
         }
     }
