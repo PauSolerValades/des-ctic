@@ -27,6 +27,7 @@ const PagedBitSet = ds_pkg.PagedBitSet;
 
 const Event = entities.Event;
 const Action = entities.Action;
+const Propagate = entities.Propagate;
 const Session = entities.Session;
 const User = entities.User;
 const Post = entities.Post;
@@ -79,7 +80,7 @@ fn propagatePost(gpa: Allocator, topology: *const Topology, state: *SimState, t_
     else
         @as(u32, @intCast(topology.csr.len));
     const count = end_idx - start_idx;
-    assert(start_idx + count < topology.csr.len);
+    assert(start_idx + count <= topology.csr.len);
     const followers = topology.csr[start_idx .. start_idx + count];
 
     const tl_event = TimelineEvent{
@@ -96,6 +97,204 @@ fn propagatePost(gpa: Allocator, topology: *const Topology, state: *SimState, t_
         // this is the backlog, propagation is not in the active timeline
         state.users.items(.timeline)[fid].getBackground().push(gpa, tl_event) catch return error.OutOfMemoryTimeline;
     }
+}
+
+const SimInfo = struct {
+    topology: *const Topology,
+    params: *const SimParams,
+    state: *SimState,
+    metrics: *SimMetrics,
+    traces: TraceWriters,
+    now: f64,
+};
+
+const UserInfo = struct {
+    session_gen: []u32,
+    online: []bool,
+    session_start: []f64,
+    num_posts: []u32,
+};
+
+fn handleCreate(gpa: Allocator, rng: Random, queue: *EventQueue, sim: *const SimInfo, user: *const UserInfo, uid: u32, gen_id: u64) SimError!void {
+    const new_post_id = sim.metrics.post_count;
+
+    user.num_posts[uid] += 1;
+
+    // creator has seen and implicitly interacted with their own post
+    sim.state.users.items(.liked_posts)[uid].putNoClobber(gpa, new_post_id, new_post_id) catch return error.OutOfMemoryUserMap;
+    sim.state.users.items(.reposted_posts)[uid].putNoClobber(gpa, new_post_id, new_post_id) catch return error.OutOfMemoryUserMap;
+
+    const propagate = gen.eventPropagate(rng, sim.params, sim.now, uid, new_post_id, uid, sim.metrics.generated_events);
+    queue.push(gpa, propagate) catch return error.OutOfMemoryQueue;
+    sim.metrics.generated_events += 1;
+
+    const c = TraceCreate{ .time = sim.now, .user_id = uid, .post_id = new_post_id, .event_id = sim.metrics.processed_events, .gen_id = gen_id };
+    const bytes = std.mem.asBytes(&c);
+    try sim.traces.create.writeAll(bytes);
+    sim.metrics.post_count += 1;
+    sim.metrics.processed_events += 1;
+
+    const new_post = gen.eventCreatePost(rng, sim.params, sim.now, uid, user.session_gen[uid], sim.metrics.generated_events);
+    queue.push(gpa, new_post) catch return error.OutOfMemoryQueue;
+    sim.metrics.generated_events += 1;
+}
+
+fn sessionStart(gpa: Allocator, rng: Random, queue: *EventQueue, sim: *const SimInfo, user: *const UserInfo, uid: u32) SimError!void {
+    user.online[uid] = true;
+    user.session_gen[uid] += 1;
+
+    user.session_start[uid] = sim.now; // Record start time
+    sim.metrics.total_sessions += 1;
+
+    // swap to bring backlog (posts accumulated during offline + previous session) to the front
+    sim.state.users.items(.timeline)[uid].switchTl();
+
+    const sw = TraceSwap{ .time = sim.now, .user_id = uid, .reason = .session_start };
+    const sw_bytes = std.mem.asBytes(&sw);
+    try sim.traces.swaps.writeAll(sw_bytes);
+
+    const first_action = gen.eventAction(rng, sim.params, sim.now, uid, user.session_gen[uid], sim.metrics.generated_events);
+    queue.push(gpa, first_action) catch return error.OutOfMemoryQueue;
+    sim.metrics.generated_events += 1;
+
+    const new_post = gen.eventCreateFirstPost(rng, sim.params, sim.now, uid, user.session_gen[uid], sim.metrics.generated_events);
+    queue.push(gpa, new_post) catch return error.OutOfMemoryQueue;
+    sim.metrics.generated_events += 1;
+
+    const end_session = gen.eventSessionEnd(rng, sim.params, sim.now, uid, user.session_gen[uid], sim.metrics.generated_events);
+    queue.push(gpa, end_session) catch return error.OutOfMemoryQueue;
+    sim.metrics.generated_events += 1;
+}
+
+fn sessionEnd(gpa: Allocator, rng: Random, queue: *EventQueue, sim: *const SimInfo, user: *const UserInfo, uid: u32) SimError!void {
+    // schedule users wake up time
+    user.online[uid] = false;
+    // metrics
+    sim.metrics.total_online_time += (sim.now - user.session_start[uid]);
+    sim.metrics.max_duration_ends += 1;
+
+    const start_session = gen.eventSessionStart(rng, sim.params, sim.now, uid, user.session_gen[uid], sim.metrics.generated_events);
+    queue.push(gpa, start_session) catch return error.OutOfMemoryQueue;
+    sim.metrics.generated_events += 1;
+
+    // clear the active timeline (posts the user finished consuming).
+    // the background timeline is preserved — it holds posts that arrived
+    // during the session but weren't swapped in yet.
+    sim.state.users.items(.timeline)[uid].getActive().clearRetainingCapacity();
+}
+
+fn handleSession(gpa: Allocator, rng: Random, queue: *EventQueue, sim: *const SimInfo, user: *const UserInfo, uid: u32, gen_id: u64, ssn: Session) SimError!void {
+    const background_timeline = sim.state.users.items(.timeline)[uid].getBackground();
+    // a .end_boredom check not needed as backlog is zero for sure
+    const backlog: u32 = if (ssn == .end) @intCast(background_timeline.items.len) else 0;
+    const s = TraceSession{ .time = sim.now, .type = ssn, .user_id = uid, .event_id = sim.metrics.processed_events, .gen_id = gen_id, .backlog = backlog };
+    const bytes = std.mem.asBytes(&s);
+    try sim.traces.session.writeAll(bytes);
+
+    switch (ssn) {
+        .start => try sessionStart(gpa, rng, queue, sim, user, uid),
+        .end, .end_boredom => try sessionEnd(gpa, rng, queue, sim, user, uid),
+    }
+    sim.metrics.processed_events += 1; // both .end and .start do not skip the loop, so its okay to put it here:
+}
+
+fn handleAction(gpa: Allocator, rng: Random, queue: *EventQueue, sim: *const SimInfo, user: *const UserInfo, uid: u32, gen_id: u64, act: Action) SimError!void {
+    const user_timeline = sim.state.users.items(.timeline)[uid].getActive();
+
+    if (user_timeline.items.len != 0) {
+        // Drain already-interacted posts inline to avoid bouncing
+        // through the global event queue for each skipped post.
+        var post: ?TimelineEvent = null;
+        while (user_timeline.items.len > 0) {
+            const candidate = user_timeline.pop();
+            if (sim.state.users.items(.reposted_posts)[uid].get(candidate.post_id)) |_| {} else {
+                post = candidate;
+                break;
+            }
+        }
+
+        if (post) |p| {
+            assert(sim.state.users.items(.reposted_posts)[uid].get(p.post_id) == null);
+
+            const a = TraceAction{ .time = sim.now, .type = act, .user_id = uid, .post_id = p.post_id, .parent_id = p.parent_id, .event_id = sim.metrics.processed_events, .gen_id = gen_id };
+            const bytes = std.mem.asBytes(&a);
+            try sim.traces.action.writeAll(bytes);
+
+            sim.metrics.impressions += 1;
+
+            switch (act) {
+                .repost => {
+                    // desensitized: user propagated, can't interact with this post again
+                    sim.state.users.items(.reposted_posts)[uid].putNoClobber(gpa, p.post_id, p.post_id) catch return error.OutOfMemoryUserMap;
+
+                    const propagate = gen.eventPropagate(rng, sim.params, sim.now, uid, p.post_id, uid, sim.metrics.generated_events);
+                    queue.push(gpa, propagate) catch return error.OutOfMemoryQueue;
+                    sim.metrics.generated_events += 1;
+                    sim.metrics.reposts += 1;
+                },
+                .like => {
+                    // desensitized: user cannot like a post twice
+                    if (sim.state.users.items(.liked_posts)[uid].get(p.post_id) != null) {
+                        sim.state.users.items(.liked_posts)[uid].putNoClobber(gpa, p.post_id, p.post_id) catch return error.OutOfMemoryUserMap;
+                        sim.metrics.likes += 1;
+                    }
+                },
+                .ignore => {
+                    // NOT desensitized: user can be re-exposed to this post via another propagation
+                    // (aligned with Independent Cascade model: exposure ≠ adoption)
+                    sim.metrics.ignored += 1;
+                },
+            }
+            sim.metrics.processed_events += 1;
+        }
+
+        const event = gen.eventAction(rng, sim.params, sim.now, uid, user.session_gen[uid], sim.metrics.generated_events);
+        queue.push(gpa, event) catch return error.OutOfMemoryQueue;
+        sim.metrics.generated_events += 1;
+    } else {
+        try handleActionIdle(gpa, rng, queue, sim, user, uid, gen_id);
+    }
+}
+
+fn handleActionIdle(gpa: Allocator, rng: Random, queue: *EventQueue, sim: *const SimInfo, user: *const UserInfo, uid: u32, gen_id: u64) SimError!void {
+    const background_timeline = sim.state.users.items(.timeline)[uid].getBackground();
+
+    if (background_timeline.items.len == 0) {
+        // Boredom mechanic
+        user.online[uid] = false;
+
+        sim.metrics.total_online_time += (sim.now - user.session_start[uid]);
+        sim.metrics.empty_timeline_ends += 1;
+        user.session_gen[uid] += 1;
+
+        const s = TraceSession{ .time = sim.now, .type = .end_boredom, .user_id = uid, .event_id = sim.metrics.processed_events, .gen_id = gen_id, .backlog = 0 };
+        const bytes = std.mem.asBytes(&s);
+        try sim.traces.session.writeAll(bytes);
+
+        const bored_start = gen.eventSessionStart(rng, sim.params, sim.now, uid, user.session_gen[uid], sim.metrics.generated_events);
+        queue.push(gpa, bored_start) catch return error.OutOfMemoryQueue;
+        sim.metrics.generated_events += 1;
+        sim.metrics.processed_events += 1;
+    } else {
+        // switch the timelines add a new event action which will be from the other timeline
+        sim.state.users.items(.timeline)[uid].switchTl();
+
+        const sw = TraceSwap{ .time = sim.now, .user_id = uid, .reason = .refresh };
+        const sw_bytes = std.mem.asBytes(&sw);
+        try sim.traces.swaps.writeAll(sw_bytes);
+
+        const action = gen.eventAction(rng, sim.params, sim.now, uid, user.session_gen[uid], sim.metrics.generated_events);
+        queue.push(gpa, action) catch return error.OutOfMemoryQueue;
+        sim.metrics.generated_events += 1;
+    }
+}
+
+fn handlePropagate(gpa: Allocator, sim: *const SimInfo, uid: u32, gen_id: u64, post: Propagate) SimError!void {
+    try propagatePost(gpa, sim.topology, sim.state, sim.now, uid, post.post_id, post.parent_id);
+    const p = TracePropagation{ .time = sim.now, .post_id = post.post_id, .user_id = uid, .event_id = sim.metrics.processed_events, .gen_id = gen_id };
+    const bytes = std.mem.asBytes(&p);
+    try sim.traces.propagate.writeAll(bytes);
+    sim.metrics.processed_events += 1;
 }
 
 fn stageOne(
@@ -226,7 +425,6 @@ pub fn simulate(
     if (simctx.global.warmup_time != 0) {
         try stageOne(gpa, rng, topology, simctx, state, &queue, &metrics, &t_clock, traces);
     }
-    // queue.clearRetainingCapacity();
 
     // Warmup propagated all posts into getBackground(). Swap so they're
     // immediately visible when the real simulation starts.
@@ -257,20 +455,34 @@ pub fn simulate(
     const user_session_start = state.users.items(.session_start_time);
     const user_num_posts = state.users.items(.num_posts);
 
+    var sim = SimInfo{
+        .topology = topology,
+        .params = simctx,
+        .state = state,
+        .metrics = &metrics,
+        .traces = traces,
+        .now = 0.0,
+    };
+    const user = UserInfo{
+        .session_gen = user_session,
+        .online = user_online,
+        .session_start = user_session_start,
+        .num_posts = user_num_posts,
+    };
+
     while (t_clock <= t_end and queue.items.len > 0) {
         const current_event = queue.pop();
         const current_uid: u32 = current_event.user_id;
         const gen_id = current_event.id;
         std.debug.assert(current_event.time >= t_clock);
         t_clock = current_event.time;
+        sim.now = t_clock;
 
         // check staleness of the event.
-        // NOTE: start is not affected by this, as whenever a session starts, the session_gen is augmented by one
-        // it will be never triggered.
+        // NOTE: start is not affected by this, as whenever a session starts, the session_gen is augmented by one it will be never triggered.
         // also, propagation must be excluded, as the user has already interacted.
         if (current_event.type != .propagate) {
-            // wake-up .start events fire while the user is offline: they must
-            // bypass the online gate or no user can ever come back online.
+            // wake-up .start events fire while the user is offline: they must bypass the online gate or no user can ever come back online.
             const is_wakeup: bool = current_event.type == .session and current_event.type.session == .start;
             const is_event_stale: bool = current_event.session_gen != user_session[current_uid];
             const is_user_online: bool = user_online[current_uid];
@@ -280,183 +492,10 @@ pub fn simulate(
             }
         }
         switch (current_event.type) {
-            .create => {
-                const new_post_id = metrics.post_count;
-
-                user_num_posts[current_uid] += 1;
-
-                // if someday we can add the contents of the post, this line here would have to come back
-                // state.posts.append(arena, .{ .id = new_post_id, .author = current_uid }) catch return error.OutOfMemorySMAList;
-
-                // creator has seen and implicitly interacted with their own post
-                state.users.items(.liked_posts)[current_uid].putNoClobber(gpa, new_post_id, new_post_id) catch return error.OutOfMemoryUserMap;
-                state.users.items(.reposted_posts)[current_uid].putNoClobber(gpa, new_post_id, new_post_id) catch return error.OutOfMemoryUserMap;
-
-                const propagate = gen.eventPropagate(rng, simctx, t_clock, current_uid, new_post_id, current_uid, metrics.generated_events);
-                queue.push(gpa, propagate) catch return error.OutOfMemoryQueue;
-                metrics.generated_events += 1;
-
-                const c = TraceCreate{ .time = t_clock, .user_id = current_uid, .post_id = new_post_id, .event_id = metrics.processed_events, .gen_id = gen_id };
-                const bytes = std.mem.asBytes(&c);
-                try traces.create.writeAll(bytes);
-                metrics.post_count += 1;
-                metrics.processed_events += 1;
-
-                const new_post = gen.eventCreatePost(rng, simctx, t_clock, current_uid, user_session[current_uid], metrics.generated_events);
-                queue.push(gpa, new_post) catch return error.OutOfMemoryQueue;
-                metrics.generated_events += 1;
-            },
-
-            .session => |ssn| {
-                const user_timeline = state.users.items(.timeline)[current_uid].getActive();
-                const background_timeline = state.users.items(.timeline)[current_uid].getBackground();
-                // a .end_boredom check not needed as backlog is zero for sure
-                const backlog: u32 = if (ssn == .end) @intCast(background_timeline.items.len) else 0;
-                const s = TraceSession{ .time = t_clock, .type = ssn, .user_id = current_uid, .event_id = metrics.processed_events, .gen_id = gen_id, .backlog = backlog };
-                const bytes = std.mem.asBytes(&s);
-                try traces.session.writeAll(bytes);
-
-                switch (ssn) {
-                    .start => {
-                        user_online[current_uid] = true;
-                        user_session[current_uid] += 1;
-
-                        user_session_start[current_uid] = t_clock; // Record start time
-                        metrics.total_sessions += 1;
-
-                        // swap to bring backlog (posts accumulated during offline + previous session) to the front
-                        state.users.items(.timeline)[current_uid].switchTl();
-
-                        const sw = TraceSwap{ .time = t_clock, .user_id = current_uid, .reason = .session_start };
-                        const sw_bytes = std.mem.asBytes(&sw);
-                        try traces.swaps.writeAll(sw_bytes);
-
-                        const first_action = gen.eventAction(rng, simctx, t_clock, current_uid, user_session[current_uid], metrics.generated_events);
-                        queue.push(gpa, first_action) catch return error.OutOfMemoryQueue;
-                        metrics.generated_events += 1;
-
-                        const new_post = gen.eventCreateFirstPost(rng, simctx, t_clock, current_uid, user_session[current_uid], metrics.generated_events);
-                        queue.push(gpa, new_post) catch return error.OutOfMemoryQueue;
-                        metrics.generated_events += 1;
-
-                        const end_session = gen.eventSessionEnd(rng, simctx, t_clock, current_uid, user_session[current_uid], metrics.generated_events);
-                        queue.push(gpa, end_session) catch return error.OutOfMemoryQueue;
-                        metrics.generated_events += 1;
-                    },
-                    .end, .end_boredom => {
-                        // schedule users wake up time
-                        user_online[current_uid] = false;
-                        // metrics
-                        metrics.total_online_time += (t_clock - user_session_start[current_uid]);
-                        metrics.max_duration_ends += 1;
-
-                        const start_session = gen.eventSessionStart(rng, simctx, t_clock, current_uid, user_session[current_uid], metrics.generated_events);
-                        queue.push(gpa, start_session) catch return error.OutOfMemoryQueue;
-                        metrics.generated_events += 1;
-
-                        // clear the active timeline (posts the user finished consuming).
-                        // the background timeline is preserved — it holds posts that arrived
-                        // during the session but weren't swapped in yet.
-                        user_timeline.clearRetainingCapacity();
-                    },
-                }
-                metrics.processed_events += 1; // both .end and .start do not skip the loop, so its okay to put it here:
-            },
-
-            .action => |act| {
-                const user_timeline = state.users.items(.timeline)[current_uid].getActive();
-
-                if (user_timeline.items.len != 0) {
-                    // Drain already-interacted posts inline to avoid bouncing
-                    // through the global event queue for each skipped post.
-                    var post: ?TimelineEvent = null;
-                    while (user_timeline.items.len > 0) {
-                        const candidate = user_timeline.pop();
-                        if (state.users.items(.reposted_posts)[current_uid].get(candidate.post_id)) |_| {} else {
-                            post = candidate;
-                            break;
-                        }
-                    }
-
-                    if (post) |p| {
-                        assert(state.users.items(.reposted_posts)[current_uid].get(p.post_id) == null);
-
-                        const a = TraceAction{ .time = t_clock, .type = act, .user_id = current_uid, .post_id = p.post_id, .parent_id = p.parent_id, .event_id = metrics.processed_events, .gen_id = gen_id };
-                        const bytes = std.mem.asBytes(&a);
-                        try traces.action.writeAll(bytes);
-
-                        metrics.impressions += 1;
-
-                        switch (act) {
-                            .repost => {
-                                // desensitized: user propagated, can't interact with this post again
-                                state.users.items(.reposted_posts)[current_uid].putNoClobber(gpa, p.post_id, p.post_id) catch return error.OutOfMemoryUserMap;
-
-                                const propagate = gen.eventPropagate(rng, simctx, t_clock, current_uid, p.post_id, current_uid, metrics.generated_events);
-                                queue.push(gpa, propagate) catch return error.OutOfMemoryQueue;
-                                metrics.generated_events += 1;
-                                metrics.reposts += 1;
-                            },
-                            .like => {
-                                // desensitized: user cannot like a post twice
-                                if (state.users.items(.liked_posts)[current_uid].get(p.post_id) != null) {
-                                    state.users.items(.liked_posts)[current_uid].putNoClobber(gpa, p.post_id, p.post_id) catch return error.OutOfMemoryUserMap;
-                                    metrics.likes += 1;
-                                }
-                            },
-                            .ignore => {
-                                // NOT desensitized: user can be re-exposed to this post via another propagation
-                                // (aligned with Independent Cascade model: exposure ≠ adoption)
-                                metrics.ignored += 1;
-                            },
-                        }
-                        metrics.processed_events += 1;
-                    }
-
-                    const event = gen.eventAction(rng, simctx, t_clock, current_uid, user_session[current_uid], metrics.generated_events);
-                    queue.push(gpa, event) catch return error.OutOfMemoryQueue;
-                    metrics.generated_events += 1;
-                } else {
-                    const background_timeline = state.users.items(.timeline)[current_uid].getBackground();
-
-                    if (background_timeline.items.len == 0) {
-                        // Boredom mechanic
-                        user_online[current_uid] = false;
-
-                        metrics.total_online_time += (t_clock - user_session_start[current_uid]);
-                        metrics.empty_timeline_ends += 1;
-                        user_session[current_uid] += 1;
-
-                        const s = TraceSession{ .time = t_clock, .type = .end_boredom, .user_id = current_uid, .event_id = metrics.processed_events, .gen_id = gen_id, .backlog = 0 };
-                        const bytes = std.mem.asBytes(&s);
-                        try traces.session.writeAll(bytes);
-
-                        const bored_start = gen.eventSessionStart(rng, simctx, t_clock, current_uid, user_session[current_uid], metrics.generated_events);
-                        queue.push(gpa, bored_start) catch return error.OutOfMemoryQueue;
-                        metrics.generated_events += 1;
-                        metrics.processed_events += 1;
-                    } else {
-                        // switch the timelines add a new event action which will be from the other timeline
-                        state.users.items(.timeline)[current_uid].switchTl();
-
-                        const sw = TraceSwap{ .time = t_clock, .user_id = current_uid, .reason = .refresh };
-                        const sw_bytes = std.mem.asBytes(&sw);
-                        try traces.swaps.writeAll(sw_bytes);
-
-                        const action = gen.eventAction(rng, simctx, t_clock, current_uid, user_session[current_uid], metrics.generated_events);
-                        queue.push(gpa, action) catch return error.OutOfMemoryQueue;
-                        metrics.generated_events += 1;
-                    }
-                }
-            },
-
-            .propagate => |post| {
-                try propagatePost(gpa, topology, state, t_clock, current_uid, post.post_id, post.parent_id);
-                const p = TracePropagation{ .time = t_clock, .post_id = post.post_id, .user_id = current_uid, .event_id = metrics.processed_events, .gen_id = gen_id };
-                const bytes = std.mem.asBytes(&p);
-                try traces.propagate.writeAll(bytes);
-                metrics.processed_events += 1;
-            },
+            .create => try handleCreate(gpa, rng, &queue, &sim, &user, current_uid, gen_id),
+            .session => |ssn| try handleSession(gpa, rng, &queue, &sim, &user, current_uid, gen_id, ssn),
+            .action => |act| try handleAction(gpa, rng, &queue, &sim, &user, current_uid, gen_id, act),
+            .propagate => |post| try handlePropagate(gpa, &sim, current_uid, gen_id, post),
         }
     }
 
@@ -466,6 +505,10 @@ pub fn simulate(
     try traces.propagate.flush();
     try traces.swaps.flush();
 
+    return computeResults(state, &metrics, t_clock);
+}
+
+fn computeResults(state: *SimState, metrics: *const SimMetrics, t_clock: f64) SimResults {
     var total_active_backlog: usize = 0;
     var total_backlog: usize = 0;
     for (state.users.items(.timeline)) |*tl| {
@@ -489,7 +532,7 @@ pub fn simulate(
     const margin_error = 1.96 * (std_dev / std.math.sqrt(@as(f64, @floatFromInt(state.users.len))));
     const interactions = metrics.likes + metrics.reposts;
 
-    const result = SimResults{
+    return .{
         .processed_events = metrics.processed_events,
         .generated_events = metrics.generated_events,
         .dropped_events = metrics.dropped_events,
@@ -512,8 +555,6 @@ pub fn simulate(
         .timeline_drain_ratio = @as(f64, @floatFromInt(metrics.empty_timeline_ends)) / @as(f64, @floatFromInt(metrics.total_sessions)),
         .posts_at_warmup = @as(f64, @floatFromInt(metrics.posts_at_warmup)) / @as(f64, @floatFromInt(metrics.post_count)),
     };
-
-    return result;
 }
 
 fn writeToTrace(comptime T: type, writer: *Io.Writer, event: T) !void {
