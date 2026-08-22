@@ -234,7 +234,7 @@ fn handleAction(gpa: Allocator, rng: Random, queue: *EventQueue, sim: *const Sim
                 },
                 .like => {
                     // desensitized: user cannot like a post twice
-                    if (sim.state.users.items(.liked_posts)[uid].get(p.post_id) != null) {
+                    if (sim.state.users.items(.liked_posts)[uid].get(p.post_id) == null) {
                         sim.state.users.items(.liked_posts)[uid].putNoClobber(gpa, p.post_id, p.post_id) catch return error.OutOfMemoryUserMap;
                         sim.metrics.likes += 1;
                     }
