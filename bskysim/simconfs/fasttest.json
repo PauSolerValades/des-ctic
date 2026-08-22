@@ -1,8 +1,8 @@
 {
   "seed": 42,
-  "horizon": 50000,
-  "duration": 40000,
-  "warmup_time": 10000,
+  "horizon": 10000,
+  "duration": 5000,
+  "warmup_time": 100,
   "user_policy": {
     "weights": [
       0.8,

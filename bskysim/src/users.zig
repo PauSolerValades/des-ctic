@@ -62,7 +62,6 @@ pub fn create(io: Io, gpa: Allocator, rng: Random, num_users: usize, userparams_
     defer load_data_arena.deinit();
 
     const content = try Io.Dir.cwd().readFileAlloc(io, userparams_file, tmpalloc, .unlimited);
-    defer gpa.free(content);
 
     const params_pair: []UserConf = try parseUsers(tmpalloc, content, stderr);
 

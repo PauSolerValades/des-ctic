@@ -9,35 +9,28 @@ edges: u32,
 csr: []u32,
 start: []u32,
 
-pub fn create(arena: Allocator, data: BinaryGraph) !@This() {
+pub fn create(arena: Allocator, scratch: Allocator, data: BinaryGraph) !@This() {
     var followers: []u32 = try arena.alloc(u32, data.num_edges);
     var followers_start: []u32 = try arena.alloc(u32, data.num_nodes);
 
-    // as its temporal and I don't want to clutter the precious arena, lets init one in itself
-    var gpa: std.heap.DebugAllocator(.{}) = .init;
-    const allocator = gpa.allocator();
-    defer {
-        const deinit_status = gpa.deinit();
-        //fail test; can't try in defer as defer is executed after we return
-        if (deinit_status == .leak) @panic("OH GOD PLEASE NO, NO");
-    }
-    // temporary list of arraylists to hold the followers:
-    var tmp_followers: []ArrayList(u32) = try allocator.alloc(ArrayList(u32), data.num_nodes);
+    // temporary list of arraylists to hold the followers; freed at the end,
+    // not part of the long-lived arena.
+    var tmp_followers: []ArrayList(u32) = try scratch.alloc(ArrayList(u32), data.num_nodes);
     for (0..tmp_followers.len) |i| {
         tmp_followers[i] = .empty;
     }
     defer {
         for (tmp_followers) |*f| {
-            f.deinit(allocator);
+            f.deinit(scratch);
         }
-        allocator.free(tmp_followers);
+        scratch.free(tmp_followers);
     }
 
     var ei: usize = 0;
     while (ei < data.num_edges * 2) : (ei += 2) {
         const actor_id = data.edges[ei];
         const subject_id = data.edges[ei + 1];
-        try tmp_followers[subject_id].append(allocator, @intCast(actor_id));
+        try tmp_followers[subject_id].append(scratch, @intCast(actor_id));
     }
 
     var acc: usize = 0;

@@ -77,7 +77,7 @@ pub fn main(init: std.process.Init) !void {
         try stderr.flush();
         std.process.exit(1);
     };
-    defer config.delete(gpa);
+    defer config.delete(arena);
     try stderr.flush(); // a warning in the distribution parsing can actually happen
 
     config.checkValidity() catch |err| {
@@ -106,7 +106,7 @@ pub fn main(init: std.process.Init) !void {
     try stdout.flush();
 
     const startTimeWireData = Io.Timestamp.now(init.io, .real);
-    var topology: Topology = try .create(arena, sampled_topology);
+    var topology: Topology = try .create(arena, gpa, sampled_topology);
     defer topology.delete(arena);
     const elapsedTimeWireData = startTimeWireData.untilNow(init.io, .real);
 
@@ -223,6 +223,7 @@ fn launchWorkers(
         };
 
         const batch_args = .{
+            gpa,
             &mutex_times,
             times_file,
             topology,
@@ -249,6 +250,7 @@ const WorkerConfig = struct {
 };
 
 fn simulationBatch(
+    gpa: std.mem.Allocator,
     mutex_times: *Io.Mutex,
     times_file: Io.File,
     topology: *const Topology,
@@ -260,13 +262,6 @@ fn simulationBatch(
     var aa: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
     defer aa.deinit();
     const arena = aa.allocator();
-
-    var general: std.heap.DebugAllocator(.{}) = .init;
-    defer {
-        const deinit_status = general.deinit();
-        if (deinit_status == .leak) @panic("TEST FAIL");
-    }
-    const gpa = general.allocator();
 
     var threaded: Io.Threaded = .init_single_threaded;
     const io = threaded.io();
