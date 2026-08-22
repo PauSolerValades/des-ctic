@@ -5,6 +5,7 @@ const ArrayList = std.ArrayList;
 const Random = std.Random;
 const Io = std.Io;
 const Order = std.math.Order;
+const assert = std.debug.assert;
 
 const DaryHeap = @import("ds").DaryHeap;
 
@@ -106,11 +107,7 @@ fn stageOne(
     t_clock: *f64,
     traces: TraceWriters,
 ) SimError!void {
-
     // We create an event per user to kickstart the user posts.
-    // state.user_seen_post.ensureItemCapacity(arena, state.users.len) catch return error.OutOfMemoryPagedBitSet;
-    // state.user_interact_post.ensureItemCapacity(arena, state.users.len) catch return error.OutOfMemoryPagedBitSet;
-
     for (0..state.users.len) |uid| {
         // we create a creation event
         const create_post = gen.eventCreateFirstPost(rng, params, t_clock.*, @intCast(uid), 0, metrics.generated_events);
@@ -130,12 +127,10 @@ fn stageOne(
             .create => {
                 const new_post_id = metrics.post_count;
 
-                state.posts.append(arena, .{ .id = new_post_id, .author = current_uid }) catch return error.OutOfMemorySMAList;
-                // state.user_seen_post.ensureItemCapacity(arena, new_post_id) catch return error.OutOfMemoryPagedBitSet;
-                // state.user_interact_post.ensureItemCapacity(arena, new_post_id) catch return error.OutOfMemoryPagedBitSet;
+                // if someday we can add the contents of the post, this line here would have to come back
+                // state.posts.append(arena, .{ .id = new_post_id, .author = current_uid }) catch return error.OutOfMemorySMAList;
 
                 // creator has seen and implicitly interacted with their own post
-                state.users.items(.seen_posts)[current_uid].putNoClobber(gpa, new_post_id, new_post_id) catch return error.OutOfMemoryUserMap;
                 state.users.items(.liked_posts)[current_uid].putNoClobber(gpa, new_post_id, new_post_id) catch return error.OutOfMemoryUserMap;
                 state.users.items(.reposted_posts)[current_uid].putNoClobber(gpa, new_post_id, new_post_id) catch return error.OutOfMemoryUserMap;
 
@@ -183,9 +178,6 @@ pub fn initSessions(
     const user_session_start = state.users.items(.session_start_time);
 
     for (0..state.users.len) |uid| {
-        // this is to avoid potential problems :)
-        // graph.timelines[uid].clearRetainingCapacity();
-
         const r = unif.sample(rng);
         if (r < params.global.offline_startup_ratio) { // user starts offline
             user_online[uid] = false;
@@ -291,11 +283,11 @@ pub fn simulate(
                 const new_post_id = metrics.post_count;
 
                 user_num_posts[current_uid] += 1;
-                // state.user_seen_post.ensureItemCapacity(arena, new_post_id) catch return error.OutOfMemoryPagedBitSet;
-                // state.user_interact_post.ensureItemCapacity(arena, new_post_id) catch return error.OutOfMemoryPagedBitSet;
-                // creator has seen and implicitly interacted with their own post
 
-                state.users.items(.seen_posts)[current_uid].putNoClobber(gpa, new_post_id, new_post_id) catch return error.OutOfMemoryUserMap;
+                // if someday we can add the contents of the post, this line here would have to come back
+                // state.posts.append(arena, .{ .id = new_post_id, .author = current_uid }) catch return error.OutOfMemorySMAList;
+
+                // creator has seen and implicitly interacted with their own post
                 state.users.items(.liked_posts)[current_uid].putNoClobber(gpa, new_post_id, new_post_id) catch return error.OutOfMemoryUserMap;
                 state.users.items(.reposted_posts)[current_uid].putNoClobber(gpa, new_post_id, new_post_id) catch return error.OutOfMemoryUserMap;
 
@@ -379,19 +371,19 @@ pub fn simulate(
                     var post: ?TimelineEvent = null;
                     while (user_timeline.items.len > 0) {
                         const candidate = user_timeline.pop();
-                        if (state.users.items(.seen_posts)[current_uid].get(candidate.post_id)) |_| {} else {
+                        if (state.users.items(.reposted_posts)[current_uid].get(candidate.post_id)) |_| {} else {
                             post = candidate;
                             break;
                         }
                     }
 
                     if (post) |p| {
+                        assert(state.users.items(.reposted_posts)[current_uid].get(p.post_id) == null);
+
                         const a = TraceAction{ .time = t_clock, .type = act, .user_id = current_uid, .post_id = p.post_id, .parent_id = p.parent_id, .event_id = metrics.processed_events, .gen_id = gen_id };
                         const bytes = std.mem.asBytes(&a);
                         try traces.action.writeAll(bytes);
 
-                        // Always mark as seen (diagnostic: counts every exposure)
-                        state.users.items(.seen_posts)[current_uid].putNoClobber(gpa, p.post_id, p.post_id) catch return error.OutOfMemoryUserMap;
                         metrics.impressions += 1;
 
                         switch (act) {
@@ -405,9 +397,11 @@ pub fn simulate(
                                 metrics.reposts += 1;
                             },
                             .like => {
-                                state.users.items(.liked_posts)[current_uid].putNoClobber(gpa, p.post_id, p.post_id) catch return error.OutOfMemoryUserMap;
-                                // desensitized: user consumed and acknowledged (platform prevents double-liking)
-                                metrics.likes += 1;
+                                // desensitized: user cannot like a post twice
+                                if (state.users.items(.liked_posts)[current_uid].get(p.post_id) != null) {
+                                    state.users.items(.liked_posts)[current_uid].putNoClobber(gpa, p.post_id, p.post_id) catch return error.OutOfMemoryUserMap;
+                                    metrics.likes += 1;
+                                }
                             },
                             .ignore => {
                                 // NOT desensitized: user can be re-exposed to this post via another propagation

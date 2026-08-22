@@ -30,7 +30,6 @@ pub const User = struct {
     session_gen: u32,
     num_posts: u32,
     session_start_time: f64,
-    seen_posts: AutoHashMap(usize, u32),
     liked_posts: AutoHashMap(usize, u32),
     reposted_posts: AutoHashMap(usize, u32),
     timeline: UserTimeline,
@@ -56,7 +55,6 @@ pub fn create(arena: Allocator, gpa: Allocator, topology: *const Topology) !Self
             .session_gen = 0,
             .num_posts = 0,
             .session_start_time = 0.0,
-            .seen_posts = .empty,
             .liked_posts = .empty,
             .reposted_posts = .empty,
             .timeline = try .create(gpa, 1024),
@@ -74,7 +72,6 @@ pub fn create(arena: Allocator, gpa: Allocator, topology: *const Topology) !Self
 pub fn delete(self: *Self, arena: Allocator, gpa: Allocator) void {
     for (0..self.users.len) |i| {
         self.users.items(.timeline)[i].delete(gpa);
-        self.users.items(.seen_posts)[i].deinit(gpa);
         self.users.items(.liked_posts)[i].deinit(gpa);
         self.users.items(.reposted_posts)[i].deinit(gpa);
     }
@@ -112,7 +109,6 @@ pub fn reset(self: *@This()) void {
         tl.active = .a;
         tl.a.clearRetainingCapacity();
         tl.b.clearRetainingCapacity();
-        self.users.items(.seen_posts)[i].clearRetainingCapacity();
         self.users.items(.liked_posts)[i].clearRetainingCapacity();
         self.users.items(.reposted_posts)[i].clearRetainingCapacity();
     }
