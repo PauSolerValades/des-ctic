@@ -180,8 +180,10 @@ fn sessionEnd(gpa: Allocator, rng: Random, queue: *EventQueue, sim: *const SimIn
 
 fn handleSession(gpa: Allocator, rng: Random, queue: *EventQueue, sim: *const SimInfo, user: *const UserInfo, uid: u32, gen_id: u64, ssn: Session) SimError!void {
     const background_timeline = sim.state.users.items(.timeline)[uid].getBackground();
-    // a .end_boredom check not needed as backlog is zero for sure
-    const backlog: u32 = if (ssn == .end) @intCast(background_timeline.elements.items.len) else 0;
+    // backlog: on .start this is the accumulated posts the user is about to
+    // consume (the "healthy timeline" the warmup must provide); on .end it is
+    // the leftover unread; on .end_boredom it is zero by definition.
+    const backlog: u32 = if (ssn == .end or ssn == .start) @intCast(background_timeline.elements.items.len) else 0;
     const s = TraceSession{ .time = sim.now, .type = ssn, .user_id = uid, .event_id = sim.metrics.processed_events, .gen_id = gen_id, .backlog = backlog };
     const bytes = std.mem.asBytes(&s);
     try sim.traces.session.writeAll(bytes);

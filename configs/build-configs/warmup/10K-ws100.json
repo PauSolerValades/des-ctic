@@ -1,0 +1,12 @@
+{
+  "simulation": {
+    "workers": 1,
+    "runs": 1,
+    "output_dir": "steps/warmup/traces/10K-warmup/ws100",
+    "data_file": "data/monotonic/10K_monotonic.bin",
+    "config_file": "configs/simconfs/warmup/params/ws100.json",
+    "userparams_file": "configs/simconfs/users.json"
+  },
+  "cascade": null,
+  "dataset": null
+}

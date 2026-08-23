@@ -1,0 +1,23 @@
+{
+  "simulation": {
+    "workers": 1,
+    "runs": 5,
+    "output_dir": "steps/warmup/traces/500K-warmup/10000-ticks",
+    "data_file": "data/monotonic/500K_monotonic.bin",
+    "config_file": "configs/simconfs/warmup/params/w10000.json",
+    "userparams_file": "configs/simconfs/users.json"
+  },
+  "cascade": {
+    "buckets": null,
+    "bucket_file": null,
+    "output_file": "cascades/500K-warmup/warmup-10000.tsv",
+    "traces_dir": "steps/warmup/traces/500K-warmup/10000-ticks"
+  },
+  "dataset": {
+    "output_dir": "datasets/500K-warmup/warmup-10000",
+    "cascades_ssv": "cascades/500K-warmup/warmup-10000.tsv",
+    "likes_ssv": "cascades/500K-warmup/warmup-10000_likes.tsv",
+    "traces_dir": "steps/warmup/traces/500K-warmup/10000-ticks",
+    "dataset": "all"
+  }
+}
