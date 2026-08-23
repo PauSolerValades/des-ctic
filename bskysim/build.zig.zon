@@ -37,8 +37,8 @@
             .hash = "eazy_args-0.2.0-c374-NXlAQAGpNWGT_K3n9DCPbP_WY6fjhQXH8q23tDD",
         },
         .ds_bskysim = .{
-            .url = "git+https://github.com/PauSolerValades/ds-bskysim.git#40ecabfd5fe6b4b7d9f7945b904b48bc141e62f6",
-            .hash = "ds_bskysim-0.0.1--ZLA_rzGAACQK0QfZDOmJWbRwQQIxHMEjtgVQ9pHnrye",
+            .url = "git+https://github.com/PauSolerValades/ds-bskysim.git#56c173f43d983c2ad69a174740b78268acc8c080",
+            .hash = "ds_bskysim-0.0.1--ZLA_o2xAABoJBN4ZVg4I1bQ2bXM1mtUvWLlLit0z-GQ",
         },
         .tabular = .{
             .url = "git+https://github.com/PauSolerValades/tabular.git#04b1852fc489bd3ec24e780992dc74983614629d",
@@ -47,6 +47,10 @@
         .distributions = .{
             .url = "git+https://github.com/PauSolerValades/distributions.git#f632a5c0d12dcc56441d1e88464bb221490a8dc3",
             .hash = "distributions-1.0.0-oWxIHLmbAQBAlCpbiEKgfbma-ASP836HqqSfuO4CK9FD",
+        },
+        .ziglangSet = .{
+            .url = "git+https://github.com/deckarep/ziglang-set.git#5e613cab0d540def68744eda863346957522eafa",
+            .hash = "ziglangSet-0.1.0-VUjv0hUUAQB3juxbnODL6190E_jPp0nQON7QWTU0oNwM",
         },
     },
     .paths = .{

@@ -116,8 +116,8 @@ fn handleCreate(gpa: Allocator, rng: Random, queue: *EventQueue, sim: *const Sim
     user.num_posts[uid] += 1;
 
     // creator has seen and implicitly interacted with their own post
-    sim.state.users.items(.liked_posts)[uid].putNoClobber(gpa, new_post_id, new_post_id) catch return error.OutOfMemoryUserMap;
-    sim.state.users.items(.reposted_posts)[uid].putNoClobber(gpa, new_post_id, new_post_id) catch return error.OutOfMemoryUserMap;
+    _ = sim.state.users.items(.liked_posts)[uid].add(gpa, new_post_id) catch return error.OutOfMemoryUserMap;
+    _ = sim.state.users.items(.reposted_posts)[uid].add(gpa, new_post_id) catch return error.OutOfMemoryUserMap;
 
     const propagate = gen.eventPropagate(rng, sim.params, sim.now, uid, new_post_id, uid, sim.metrics.generated_events);
     queue.push(gpa, propagate) catch return error.OutOfMemoryQueue;
@@ -175,13 +175,13 @@ fn sessionEnd(gpa: Allocator, rng: Random, queue: *EventQueue, sim: *const SimIn
     // clear the active timeline (posts the user finished consuming).
     // the background timeline is preserved — it holds posts that arrived
     // during the session but weren't swapped in yet.
-    sim.state.users.items(.timeline)[uid].getActive().clearRetainingCapacity();
+    sim.state.users.items(.timeline)[uid].getActive().elements.clearRetainingCapacity();
 }
 
 fn handleSession(gpa: Allocator, rng: Random, queue: *EventQueue, sim: *const SimInfo, user: *const UserInfo, uid: u32, gen_id: u64, ssn: Session) SimError!void {
     const background_timeline = sim.state.users.items(.timeline)[uid].getBackground();
     // a .end_boredom check not needed as backlog is zero for sure
-    const backlog: u32 = if (ssn == .end) @intCast(background_timeline.items.len) else 0;
+    const backlog: u32 = if (ssn == .end) @intCast(background_timeline.elements.items.len) else 0;
     const s = TraceSession{ .time = sim.now, .type = ssn, .user_id = uid, .event_id = sim.metrics.processed_events, .gen_id = gen_id, .backlog = backlog };
     const bytes = std.mem.asBytes(&s);
     try sim.traces.session.writeAll(bytes);
@@ -196,20 +196,20 @@ fn handleSession(gpa: Allocator, rng: Random, queue: *EventQueue, sim: *const Si
 fn handleAction(gpa: Allocator, rng: Random, queue: *EventQueue, sim: *const SimInfo, user: *const UserInfo, uid: u32, gen_id: u64, act: Action) SimError!void {
     const user_timeline = sim.state.users.items(.timeline)[uid].getActive();
 
-    if (user_timeline.items.len != 0) {
+    if (user_timeline.elements.items.len != 0) {
         // Drain already-interacted posts inline to avoid bouncing
         // through the global event queue for each skipped post.
         var post: ?TimelineEvent = null;
-        while (user_timeline.items.len > 0) {
-            const candidate = user_timeline.pop();
-            if (sim.state.users.items(.reposted_posts)[uid].get(candidate.post_id)) |_| {} else {
+        while (user_timeline.elements.items.len > 0) {
+            const candidate = user_timeline.pop() orelse break;
+            if (!sim.state.users.items(.reposted_posts)[uid].contains(candidate.post_id)) {
                 post = candidate;
                 break;
             }
         }
 
         if (post) |p| {
-            assert(sim.state.users.items(.reposted_posts)[uid].get(p.post_id) == null);
+            assert(sim.state.users.items(.reposted_posts)[uid].contains(p.post_id) == false);
 
             const a = TraceAction{ .time = sim.now, .type = act, .user_id = uid, .post_id = p.post_id, .parent_id = p.parent_id, .event_id = sim.metrics.processed_events, .gen_id = gen_id };
             const bytes = std.mem.asBytes(&a);
@@ -220,7 +220,7 @@ fn handleAction(gpa: Allocator, rng: Random, queue: *EventQueue, sim: *const Sim
             switch (act) {
                 .repost => {
                     // desensitized: user propagated, can't interact with this post again
-                    sim.state.users.items(.reposted_posts)[uid].putNoClobber(gpa, p.post_id, p.post_id) catch return error.OutOfMemoryUserMap;
+                    _ = sim.state.users.items(.reposted_posts)[uid].add(gpa, p.post_id) catch return error.OutOfMemoryUserMap;
 
                     const propagate = gen.eventPropagate(rng, sim.params, sim.now, uid, p.post_id, uid, sim.metrics.generated_events);
                     queue.push(gpa, propagate) catch return error.OutOfMemoryQueue;
@@ -229,8 +229,8 @@ fn handleAction(gpa: Allocator, rng: Random, queue: *EventQueue, sim: *const Sim
                 },
                 .like => {
                     // desensitized: user cannot like a post twice
-                    if (sim.state.users.items(.liked_posts)[uid].get(p.post_id) == null) {
-                        sim.state.users.items(.liked_posts)[uid].putNoClobber(gpa, p.post_id, p.post_id) catch return error.OutOfMemoryUserMap;
+                    if (!sim.state.users.items(.liked_posts)[uid].contains(p.post_id)) {
+                        _ = sim.state.users.items(.liked_posts)[uid].add(gpa, p.post_id) catch return error.OutOfMemoryUserMap;
                         sim.metrics.likes += 1;
                     }
                 },
@@ -254,7 +254,7 @@ fn handleAction(gpa: Allocator, rng: Random, queue: *EventQueue, sim: *const Sim
 fn handleActionIdle(gpa: Allocator, rng: Random, queue: *EventQueue, sim: *const SimInfo, user: *const UserInfo, uid: u32, gen_id: u64) SimError!void {
     const background_timeline = sim.state.users.items(.timeline)[uid].getBackground();
 
-    if (background_timeline.items.len == 0) {
+    if (background_timeline.elements.items.len == 0) {
         // Boredom mechanic
         user.online[uid] = false;
 
@@ -327,8 +327,8 @@ fn stageOne(
                 // state.posts.append(arena, .{ .id = new_post_id, .author = current_uid }) catch return error.OutOfMemorySMAList;
 
                 // creator has seen and implicitly interacted with their own post
-                state.users.items(.liked_posts)[current_uid].putNoClobber(gpa, new_post_id, new_post_id) catch return error.OutOfMemoryUserMap;
-                state.users.items(.reposted_posts)[current_uid].putNoClobber(gpa, new_post_id, new_post_id) catch return error.OutOfMemoryUserMap;
+                _ = state.users.items(.liked_posts)[current_uid].add(gpa, new_post_id) catch return error.OutOfMemoryUserMap;
+                _ = state.users.items(.reposted_posts)[current_uid].add(gpa, new_post_id) catch return error.OutOfMemoryUserMap;
 
                 const propagate = gen.eventPropagate(rng, params, t_clock.*, current_uid, new_post_id, current_uid, metrics.generated_events);
                 queue.push(gpa, propagate) catch return error.OutOfMemoryQueue;
@@ -507,8 +507,8 @@ fn computeResults(state: *SimState, metrics: *const SimMetrics, t_clock: f64) Si
     var total_active_backlog: usize = 0;
     var total_backlog: usize = 0;
     for (state.users.items(.timeline)) |*tl| {
-        total_active_backlog += tl.getActive().items.len;
-        total_backlog += tl.getActive().items.len + tl.getBackground().items.len;
+        total_active_backlog += tl.getActive().elements.items.len;
+        total_backlog += tl.getActive().elements.items.len + tl.getBackground().elements.items.len;
     }
 
     const mean_active: f64 = @as(f64, @floatFromInt(total_active_backlog)) / @as(f64, @floatFromInt(state.users.len));
@@ -516,7 +516,7 @@ fn computeResults(state: *SimState, metrics: *const SimMetrics, t_clock: f64) Si
 
     var sum_sq_diff: f64 = 0.0;
     for (state.users.items(.timeline)) |*tl| {
-        const v: f64 = @floatFromInt(tl.getActive().items.len + tl.getBackground().items.len);
+        const v: f64 = @floatFromInt(tl.getActive().elements.items.len + tl.getBackground().elements.items.len);
         const diff = v - mean_total;
         sum_sq_diff += diff * diff;
     }

@@ -44,11 +44,18 @@ pub fn build(b: *std.Build) !void {
     });
     const tabular_mod = tabular_dep.module("tabular");
 
+    const set_dep = b.dependency("ziglangSet", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    const set_mod = set_dep.module("ziglangSet");
+
     // link the dependencies in here
     exe.root_module.addImport("eazy_args", eazy_args_mod);
     exe.root_module.addImport("ds", ds_mod);
     exe.root_module.addImport("distributions", distributions_mod);
     exe.root_module.addImport("tabular", tabular_mod);
+    exe.root_module.addImport("set", set_mod);
 
     b.installArtifact(exe); // creates the exe in the folder
 

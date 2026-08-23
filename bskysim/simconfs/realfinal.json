@@ -36,5 +36,6 @@
     }
   },
   "offline_startup_ratio": 0.5,
-  "trace_to_file": true
+  "trace_to_file": true,
+  "gap_shift": 300
 }

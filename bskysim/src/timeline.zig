@@ -1,6 +1,6 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
-const Order = std.math.Order;
+// const Order = std.math.Order;
 
 const ds = @import("ds");
 
@@ -13,18 +13,30 @@ pub const TimelineEvent = struct {
 };
 
 /// Heap comparison function for user timelines in Reverse-Chronological simulations
-pub fn compareTimelineEvent(context: void, a: TimelineEvent, b: TimelineEvent) Order {
-    _ = context;
-    return std.math.order(b.time, a.time);
-}
+// pub fn compareTimelineEvent(context: void, a: TimelineEvent, b: TimelineEvent) Order {
+//     _ = context;
+//     return std.math.order(b.time, a.time);
+// }
 
-const Timeline = ds.DaryHeap(TimelineEvent, 8, void, compareTimelineEvent);
+// const Timeline = ds.DaryHeap(TimelineEvent, 8, void, compareTimelineEvent);
+const Timeline = ds.Stack(TimelineEvent);
 
 pub const WhichTimeline = enum { a, b };
 pub const UserTimeline = struct {
     a: Timeline,
     b: Timeline,
     active: WhichTimeline,
+
+    pub fn create(gpa: Allocator, capacity: usize) !@This() {
+        const a: Timeline = try .initCapacity(gpa, capacity);
+        const b: Timeline = try .initCapacity(gpa, capacity);
+
+        return UserTimeline{
+            .a = a,
+            .b = b,
+            .active = .a,
+        };
+    }
 
     pub fn getActive(self: *@This()) *Timeline {
         return switch (self.active) {
@@ -47,21 +59,7 @@ pub const UserTimeline = struct {
         }
     }
 
-    pub fn create(gpa: Allocator, capacity: usize) !@This() {
-        var a: Timeline = .empty;
-        var b: Timeline = .empty;
-
-        try a.ensureTotalCapacity(gpa, capacity);
-        try b.ensureTotalCapacity(gpa, capacity);
-
-        return UserTimeline{
-            .a = a,
-            .b = b,
-            .active = .a,
-        };
-    }
-
-    pub fn delete(self: @This(), gpa: Allocator) void {
+    pub fn delete(self: *@This(), gpa: Allocator) void {
         self.a.deinit(gpa);
         self.b.deinit(gpa);
     }

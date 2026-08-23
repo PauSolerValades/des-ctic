@@ -19,6 +19,9 @@ const ds = @import("ds");
 const SegmentedMultiArrayList = ds.SegmentedMultiArrayList;
 const PagedBitSet = ds.PagedBitSet;
 
+const set = @import("set");
+const Set = set.HashSet;
+
 const Post = entities.Post;
 
 const NNContDist = stats.NonNegativeContinuousDistribution;
@@ -30,8 +33,8 @@ pub const User = struct {
     session_gen: u32,
     num_posts: u32,
     session_start_time: f64,
-    liked_posts: AutoHashMap(usize, u32),
-    reposted_posts: AutoHashMap(usize, u32),
+    liked_posts: Set(u32),
+    reposted_posts: Set(u32),
     timeline: UserTimeline,
 };
 
@@ -107,8 +110,8 @@ pub fn reset(self: *@This()) void {
         self.users.items(.session_start_time)[i] = 0.0;
         const tl = &self.users.items(.timeline)[i];
         tl.active = .a;
-        tl.a.clearRetainingCapacity();
-        tl.b.clearRetainingCapacity();
+        tl.a.elements.clearRetainingCapacity();
+        tl.b.elements.clearRetainingCapacity();
         self.users.items(.liked_posts)[i].clearRetainingCapacity();
         self.users.items(.reposted_posts)[i].clearRetainingCapacity();
     }
