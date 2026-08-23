@@ -90,11 +90,6 @@ fn propagatePost(gpa: Allocator, topology: *const Topology, state: *SimState, t_
     };
 
     for (followers) |fid| {
-        // Skip if follower already interacted with this post (liked/reposted).
-        // This avoids useless heap insertions for posts that would be skipped later.
-        if (state.users.items(.reposted_posts)[fid].get(post_id) != null) continue;
-        // if (state.user_interact_post.isSet(fid, post_id)) continue;
-        // this is the backlog, propagation is not in the active timeline
         state.users.items(.timeline)[fid].getBackground().push(gpa, tl_event) catch return error.OutOfMemoryTimeline;
     }
 }
