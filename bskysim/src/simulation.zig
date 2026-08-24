@@ -90,8 +90,18 @@ fn propagatePost(gpa: Allocator, topology: *const Topology, state: *SimState, t_
     };
 
     for (followers) |fid| {
-        state.users.items(.timeline)[fid].getBackground().push(gpa, tl_event) catch return error.OutOfMemoryTimeline;
+        state.users.items(.timeline)[fid].getBackground().push(gpa, tl_event) catch {
+            reportTimelineOom(fid, state.users.items(.timeline)[fid].getBackground().elements.items.len);
+            return error.OutOfMemoryTimeline;
+        };
     }
+}
+
+/// Diagnose a timeline allocation failure: print the failing follower and the
+/// timeline's current size, so the failure point is identifiable. (The VMA/RSS
+/// limits were confirmed externally via /proc/self/maps — see the run notes.)
+fn reportTimelineOom(fid: u32, events: usize) void {
+    std.debug.print("TIMELINE-OOM fid={d} events={d} bytes={d}\n", .{ fid, events, events * @sizeOf(TimelineEvent) });
 }
 
 const SimInfo = struct {
