@@ -71,7 +71,7 @@ pub const SimParams = struct {
 
 const Unif = dist.Uniform(f32);
 
-fn propagatePost(gpa: Allocator, topology: *const Topology, state: *SimState, t_clock: f64, user_id: u32, post_id: u32, parent_id: u32) SimError!void {
+fn propagatePost(tl_alloc: Allocator, topology: *const Topology, state: *SimState, t_clock: f64, user_id: u32, post_id: u32, parent_id: u32) SimError!void {
     assert(user_id < topology.nodes);
     assert(user_id >= 0);
     const start_idx = topology.start[user_id];
@@ -90,7 +90,7 @@ fn propagatePost(gpa: Allocator, topology: *const Topology, state: *SimState, t_
     };
 
     for (followers) |fid| {
-        state.users.items(.timeline)[fid].getBackground().push(gpa, tl_event) catch {
+        state.users.items(.timeline)[fid].getBackground().push(tl_alloc, tl_event) catch {
             reportTimelineOom(fid, state.users.items(.timeline)[fid].getBackground().elements.items.len);
             return error.OutOfMemoryTimeline;
         };
@@ -296,8 +296,8 @@ fn handleActionIdle(gpa: Allocator, rng: Random, queue: *EventQueue, sim: *const
     }
 }
 
-fn handlePropagate(gpa: Allocator, sim: *const SimInfo, uid: u32, gen_id: u64, post: Propagate) SimError!void {
-    try propagatePost(gpa, sim.topology, sim.state, sim.now, uid, post.post_id, post.parent_id);
+fn handlePropagate(tl_alloc: Allocator, sim: *const SimInfo, uid: u32, gen_id: u64, post: Propagate) SimError!void {
+    try propagatePost(tl_alloc, sim.topology, sim.state, sim.now, uid, post.post_id, post.parent_id);
     const p = TracePropagation{ .time = sim.now, .post_id = post.post_id, .user_id = uid, .event_id = sim.metrics.processed_events, .gen_id = gen_id };
     const bytes = std.mem.asBytes(&p);
     try sim.traces.propagate.writeAll(bytes);
@@ -306,6 +306,7 @@ fn handlePropagate(gpa: Allocator, sim: *const SimInfo, uid: u32, gen_id: u64, p
 
 fn stageOne(
     gpa: Allocator,
+    tl_alloc: Allocator,
     rng: Random,
     topology: *const Topology,
     params: *const SimParams,
@@ -359,7 +360,7 @@ fn stageOne(
             },
             .propagate => |prop| {
                 // when creating, parent_id = current_uid. Not the same when Action
-                try propagatePost(gpa, topology, state, t_clock.*, current_uid, prop.post_id, prop.parent_id);
+                try propagatePost(tl_alloc, topology, state, t_clock.*, current_uid, prop.post_id, prop.parent_id);
                 const p = TracePropagation{ .time = t_clock.*, .post_id = prop.post_id, .user_id = current_uid, .event_id = metrics.processed_events, .gen_id = gen_id };
                 const bytes = std.mem.asBytes(&p);
                 try traces.propagate.writeAll(bytes);
@@ -414,6 +415,7 @@ pub fn initSessions(
 
 pub fn simulate(
     gpa: Allocator,
+    tl_alloc: Allocator,
     rng: Random,
     topology: *const Topology,
     simctx: *const SimParams,
@@ -430,7 +432,7 @@ pub fn simulate(
 
     // generation on init
     if (simctx.global.warmup_time != 0) {
-        try stageOne(gpa, rng, topology, simctx, state, &queue, &metrics, &t_clock, traces);
+        try stageOne(gpa, tl_alloc, rng, topology, simctx, state, &queue, &metrics, &t_clock, traces);
     }
 
     // Warmup propagated all posts into getBackground(). Swap so they're
@@ -502,7 +504,7 @@ pub fn simulate(
             .create => try handleCreate(gpa, rng, &queue, &sim, &user, current_uid, gen_id),
             .session => |ssn| try handleSession(gpa, rng, &queue, &sim, &user, current_uid, gen_id, ssn),
             .action => |act| try handleAction(gpa, rng, &queue, &sim, &user, current_uid, gen_id, act),
-            .propagate => |post| try handlePropagate(gpa, &sim, current_uid, gen_id, post),
+            .propagate => |post| try handlePropagate(tl_alloc, &sim, current_uid, gen_id, post),
         }
     }
 

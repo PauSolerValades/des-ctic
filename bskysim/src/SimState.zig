@@ -43,7 +43,7 @@ posts: SegmentedMultiArrayList(Post, 16),
 
 const Self = @This();
 
-pub fn create(arena: Allocator, gpa: Allocator, topology: *const Topology) !Self {
+pub fn create(arena: Allocator, gpa: Allocator, tl_alloc: Allocator, topology: *const Topology) !Self {
     var users: MultiArrayList(User) = .empty;
     try users.ensureTotalCapacity(arena, topology.nodes);
 
@@ -60,21 +60,22 @@ pub fn create(arena: Allocator, gpa: Allocator, topology: *const Topology) !Self
             .session_start_time = 0.0,
             .liked_posts = .empty,
             .reposted_posts = .empty,
-            .timeline = try .create(gpa, 1024),
+            .timeline = try .create(tl_alloc, 1024),
         };
 
         users.appendAssumeCapacity(user);
     }
 
+    _ = gpa; // queue & per-user sets stay on gpa; timelines live in tl_alloc
     return .{
         .users = users,
         .posts = .empty,
     };
 }
 
-pub fn delete(self: *Self, arena: Allocator, gpa: Allocator) void {
+pub fn delete(self: *Self, arena: Allocator, gpa: Allocator, tl_alloc: Allocator) void {
     for (0..self.users.len) |i| {
-        self.users.items(.timeline)[i].delete(gpa);
+        self.users.items(.timeline)[i].delete(tl_alloc);
         self.users.items(.liked_posts)[i].deinit(gpa);
         self.users.items(.reposted_posts)[i].deinit(gpa);
     }

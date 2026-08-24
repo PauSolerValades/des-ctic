@@ -7,6 +7,7 @@ const argz = @import("eazy_args");
 const GlobalParams = @import("GlobalParams.zig");
 const Topology = @import("Topology.zig");
 const SimState = @import("SimState.zig");
+const RegionAllocator = @import("RegionAllocator.zig").RegionAllocator;
 const users = @import("users.zig");
 
 const simulation = @import("simulation.zig");
@@ -199,6 +200,13 @@ fn launchWorkers(
 ) !void {
     var mutex_times: Io.Mutex = .init;
 
+    // One shared region for all workers' timelines. 4 MiB/user covers 2 stacks
+    // × ~2 MiB (128K events) even for hub users; virtual, committed on touch.
+    const region_size: usize = @as(usize, workers) * @as(usize, topology.nodes) * 4 * 1024 * 1024;
+    var region = RegionAllocator.init(region_size) catch return error.OutOfMemory;
+    defer region.deinit();
+    const tl_alloc = region.allocator();
+
     var threaded: Io.Threaded = .init(gpa, .{});
     defer threaded.deinit();
     const tio = threaded.io();
@@ -224,6 +232,7 @@ fn launchWorkers(
 
         const batch_args = .{
             gpa,
+            tl_alloc,
             &mutex_times,
             times_file,
             topology,
@@ -251,6 +260,7 @@ const WorkerConfig = struct {
 
 fn simulationBatch(
     gpa: std.mem.Allocator,
+    tl_alloc: std.mem.Allocator,
     mutex_times: *Io.Mutex,
     times_file: Io.File,
     topology: *const Topology,
@@ -275,8 +285,8 @@ fn simulationBatch(
     const stderr = &stderr_writer.interface;
 
     // per-worker copy of the state; reset() between runs, delete() at the end
-    var state: SimState = try .create(arena, gpa, topology);
-    defer state.delete(arena, gpa);
+    var state: SimState = try .create(arena, gpa, tl_alloc, topology);
+    defer state.delete(arena, gpa, tl_alloc);
 
     var prng: Random.DefaultPrng = .init(config.seed);
 
@@ -304,6 +314,7 @@ fn simulationBatch(
             elapsedTime = try runTracedSimulation(
                 io,
                 gpa,
+                tl_alloc,
                 rng,
                 topology,
                 simparams,
@@ -317,7 +328,7 @@ fn simulationBatch(
             );
         } else {
             const startTime = Io.Timestamp.now(io, .cpu_thread);
-            _ = try simulation.simulate(gpa, rng, topology, simparams, &state, undefined);
+            _ = try simulation.simulate(gpa, tl_alloc, rng, topology, simparams, &state, undefined);
             elapsedTime = startTime.untilNow(io, .cpu_thread);
         }
 
@@ -339,6 +350,7 @@ fn simulationBatch(
 fn runTracedSimulation(
     io: Io,
     gpa: std.mem.Allocator,
+    tl_alloc: std.mem.Allocator,
     rng: Random,
     topology: *const Topology,
     simparams: *const SimParams,
@@ -409,6 +421,7 @@ fn runTracedSimulation(
     };
     const result = simulation.simulate(
         gpa,
+        tl_alloc,
         rng,
         topology,
         simparams,
