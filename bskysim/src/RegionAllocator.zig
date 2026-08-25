@@ -20,7 +20,7 @@ const Alignment = std.mem.Alignment;
 pub const RegionAllocator = struct {
     region: []u8,
     offset: usize = 0,
-    free_list: [num_classes]?*Node = @splat(null),
+    free_list: [num_classes]?*Node = @splat(null), // this is an array of linked lists
     mutex: std.atomic.Mutex = .unlocked,
 
     const min_class_bits = 14; // 16 KiB
