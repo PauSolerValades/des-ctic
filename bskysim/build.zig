@@ -18,6 +18,13 @@ pub fn build(b: *std.Build) !void {
         }),
     });
 
+    // std.heap.c_allocator (and therefore std.process.Init.gpa) needs libc.
+    exe.root_module.link_libc = true;
+    // jemalloc provides malloc/free/realloc/posix_memalign/malloc_usable_size,
+    // so linking its static archive before libc replaces glibc's allocator.
+    // Build it first:  cd ../jemalloc && ./autogen.sh --enable-static --disable-shared --with-jemalloc-prefix=
+    exe.root_module.addObjectFile(b.path("../../jemalloc/lib/libjemalloc.a"));
+
     exe.root_module.addOptions("build_options", opts);
 
     const eazy_args_dep = b.dependency("eazy_args", .{

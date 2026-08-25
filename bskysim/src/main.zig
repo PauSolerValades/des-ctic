@@ -7,7 +7,6 @@ const argz = @import("eazy_args");
 const GlobalParams = @import("GlobalParams.zig");
 const Topology = @import("Topology.zig");
 const SimState = @import("SimState.zig");
-const RegionAllocator = @import("RegionAllocator.zig").RegionAllocator;
 const users = @import("users.zig");
 
 const simulation = @import("simulation.zig");
@@ -200,12 +199,9 @@ fn launchWorkers(
 ) !void {
     var mutex_times: Io.Mutex = .init;
 
-    // One shared region for all workers' timelines. 4 MiB/user covers 2 stacks
-    // × ~2 MiB (128K events) even for hub users; virtual, committed on touch.
-    const region_size: usize = @as(usize, workers) * @as(usize, topology.nodes) * 4 * 1024 * 1024;
-    var region = RegionAllocator.init(region_size) catch return error.OutOfMemory;
-    defer region.deinit();
-    const tl_alloc = region.allocator();
+    // Timelines allocate through libc's malloc, which jemalloc provides
+    // (linked in build.zig). Thread-safe, arena-based, no per-alloc VMA churn.
+    const tl_alloc = std.heap.c_allocator;
 
     var threaded: Io.Threaded = .init(gpa, .{});
     defer threaded.deinit();
