@@ -20,9 +20,12 @@ pub fn build(b: *std.Build) !void {
 
     // std.heap.c_allocator (and therefore std.process.Init.gpa) needs libc.
     exe.root_module.link_libc = true;
-    // jemalloc provides malloc/free/realloc/posix_memalign/malloc_usable_size,
-    // so linking its static archive before libc replaces glibc's allocator.
-    // Build it first:  cd ../jemalloc && ./autogen.sh --enable-static --disable-shared --with-jemalloc-prefix=
+    // jemalloc provides malloc/free/realloc/posix_memalign/malloc_usable_size;
+    // linking its archive before libc replaces glibc's allocator. The archive
+    // is built here as part of the Zig build (flags live in tools/build-jemalloc.sh).
+    const jemalloc_build = b.addSystemCommand(&.{"bash"});
+    jemalloc_build.addFileArg(b.path("tools/build-jemalloc.sh"));
+    exe.step.dependOn(&jemalloc_build.step);
     exe.root_module.addObjectFile(b.path("../../jemalloc/lib/libjemalloc.a"));
 
     exe.root_module.addOptions("build_options", opts);
