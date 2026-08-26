@@ -1,5 +1,7 @@
 const std = @import("std");
 
+const jemalloc_version = "5.3.1-144-ge36a0fa5";
+
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -24,15 +26,26 @@ pub fn build(b: *std.Build) !void {
     // startup objects (GCC 16 / binutils 2.47); force gc-sections like release.
     exe.link_gc_sections = true;
 
-    // Build jemalloc (C) as part of this build. The script compiles it in its
-    // own source tree, then copies the archive to a Zig-tracked output path so
-    // the exe relinks whenever jemalloc changes.
-    const jemalloc_build = b.addSystemCommand(&.{"bash"});
-    jemalloc_build.setCwd(b.path("."));
-    jemalloc_build.addFileArg(b.path("tools/build-jemalloc.sh"));
-    jemalloc_build.has_side_effects = true; // make is incremental; always run it
-    const jemalloc_lib = jemalloc_build.addOutputFileArg("libjemalloc.a");
-    exe.root_module.addObjectFile(jemalloc_lib);
+    // jemalloc is a prebuilt static lib (see deps/jemalloc/README.md). The
+    // filename encodes the version, so this check also enforces it.
+    const jemalloc_rel = b.fmt("deps/jemalloc/libjemalloc-{s}.a", .{jemalloc_version});
+    const jemalloc_found = blk: {
+        std.Io.Dir.access(b.build_root.handle, b.graph.io, jemalloc_rel, .{}) catch |err| switch (err) {
+            error.FileNotFound => break :blk false,
+            else => return err,
+        };
+        break :blk true;
+    };
+    if (jemalloc_found) {
+        exe.root_module.addObjectFile(b.path(jemalloc_rel));
+    } else {
+        b.getInstallStep().dependOn(&b.addFail(b.fmt(
+            "jemalloc not found: expected {s}\n" ++
+                "See deps/jemalloc/README.md - build it from a jemalloc checkout and\n" ++
+                "drop the archive there (the filename encodes the version).",
+            .{jemalloc_rel},
+        )).step);
+    }
 
     exe.root_module.addOptions("build_options", opts);
 
