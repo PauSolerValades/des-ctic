@@ -1,6 +1,6 @@
 {
   "simulation": {
-    "workers": 3,
+    "workers": 12,
     "runs": 100,
     "output_dir": "steps/final/traces/100K",
     "data_file": "data/monotonic/100K_monotonic.bin",
