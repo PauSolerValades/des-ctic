@@ -78,9 +78,20 @@ def main() -> None:
 
     name, a, r2 = best
     p, logc = np.polyfit(np.log(n), np.log(mean), 1)
+    c_full = np.exp(logc)
+
+    # Big-topologies power-law (100K, 500K, 1M) — the asymptotic regime.
+    BIG = {"100K", "500K", "1M"}
+    big_sizes = [s for s in fit_sizes if s in BIG]
+    n_big = np.array([N[s] for s in big_sizes])
+    mean_big = np.array([data[s].mean() for s in big_sizes])
+    p_big, logc_big = np.polyfit(np.log(n_big), np.log(mean_big), 1)
+    c_big = np.exp(logc_big)
+
     print(f"\nFit over: {', '.join(fit_sizes)}  (excluded: {', '.join(outliers)})")
     print(f"Best model: {name} (R2={r2:.4f})  ->  time = {a:.4g} * {name.lstrip('O(').rstrip(')')} ms")
-    print(f"Free power-law exponent: p = {p:.3f}")
+    print(f"Free power-law exponent (all): p = {p:.3f}")
+    print(f"Free power-law exponent (100K-1M): p = {p_big:.3f}")
 
     print(f"\n{'Size':<6} {'n runs':>7} {'Mean (ms)':>12} {'Median (ms)':>12}")
     print("-" * 42)
@@ -112,8 +123,11 @@ def main() -> None:
                     xytext=(0, 6), ha="center", fontsize=10, color="0.6")
 
     n_fit = np.geomspace(n.min(), n.max(), 100)
-    ax.plot(n_fit, a * basis(name, n_fit), "--", color="0.2", lw=1.5,
-            label=f"{name}  ($R^2={r2:.3f}$)")
+    ax.plot(n_fit, c_full * n_fit ** p, "--", color="0.3", lw=1.5,
+            label=f"all sizes  $t \\propto n^{{{p:.2f}}}$")
+    n_big_fit = np.geomspace(n_big.min(), n_big.max(), 100)
+    ax.plot(n_big_fit, c_big * n_big_fit ** p_big, "--", color="crimson", lw=1.5,
+            label=f"100K-1M  $t \\propto n^{{{p_big:.2f}}}$")
 
     ax.set_xscale("log")
     ax.set_yscale("log")
