@@ -1,0 +1,23 @@
+{
+  "simulation": {
+    "workers": 16,
+    "runs": 100,
+    "output_dir": "steps/final/traces/50K",
+    "data_file": "data/monotonic/50K_monotonic.bin",
+    "config_file": "configs/simconfs/final.json",
+    "userparams_file": "configs/simconfs/users.json"
+  },
+  "cascade": {
+    "buckets": null,
+    "bucket_file": null,
+    "output_file": "cascades/final/50K.tsv",
+    "traces_dir": "steps/final/traces/50K"
+  },
+  "dataset": {
+    "output_dir": "datasets/final/50K",
+    "cascades_ssv": "cascades/final/50K.tsv",
+    "likes_ssv": "cascades/final/50K_likes.tsv",
+    "traces_dir": "steps/final/traces/50K",
+    "dataset": "all"
+  }
+}

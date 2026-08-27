@@ -22,8 +22,8 @@ TRACES = ROOT / "steps" / "final" / "traces"
 OUTPUT = HERE / "figures"
 OUTPUT.mkdir(exist_ok=True)
 
-SIZES = ["10K", "100K", "500K", "1M"]
-N = {"10K": 1e4, "100K": 1e5, "500K": 5e5, "1M": 1e6}
+SIZES = ["10K", "50K", "100K", "500K", "1M"]
+N = {"10K": 1e4, "50K": 5e4, "100K": 1e5, "500K": 5e5, "1M": 1e6}
 EXCLUDED = {"10K"}  # ponytail: measurement outlier (too fast vs linear trend)
 
 # Thesis styling (firehose-analysis/AGENTS.md): whitegrid, LaTeX, 11pt base.
