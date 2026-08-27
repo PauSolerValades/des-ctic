@@ -24,7 +24,7 @@ OUTPUT.mkdir(exist_ok=True)
 
 SIZES = ["10K", "50K", "100K", "500K", "1M"]
 N = {"10K": 1e4, "50K": 5e4, "100K": 1e5, "500K": 5e5, "1M": 1e6}
-EXCLUDED = {"10K"}  # ponytail: measurement outlier (too fast vs linear trend)
+EXCLUDED = set()
 
 # Thesis styling (firehose-analysis/AGENTS.md): whitegrid, LaTeX, 11pt base.
 sns.set_theme(style="whitegrid")
@@ -119,7 +119,7 @@ def main() -> None:
     ax.set_yscale("log")
     ax.set_xlabel("Network size $n$")
     ax.set_ylabel("Execution time (ms)")
-    ax.set_title("BskySim time scalability (large topologies)")
+    ax.set_title("BskySim time scalability per dataset")
     ax.legend()
 
     fig.tight_layout()
