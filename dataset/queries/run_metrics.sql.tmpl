@@ -50,7 +50,7 @@ COPY (
     SELECT
       regexp_extract(filename, '/(\d+)-', 1)::INTEGER AS run_id,
       COUNT(*) AS total_ignores
-    FROM read_json('{{.TracesDir}}/*-action_trace.jsonl', filename=true, ignore_errors=true)
+    FROM read_parquet('{{.TracesDir}}/*-action_trace.parquet', filename=true)
     WHERE type = 'ignore'
     GROUP BY run_id
   ),
@@ -62,7 +62,7 @@ COPY (
       COUNT(*) FILTER (WHERE type = 'end' AND backlog = 0)  AS total_boredom_ends,
       COUNT(*) FILTER (WHERE type = 'end' AND backlog > 0)  AS total_max_duration_ends,
       MAX("time")                                      AS duration
-    FROM read_json('{{.TracesDir}}/*-session_trace.jsonl', filename=true, ignore_errors=true)
+    FROM read_parquet('{{.TracesDir}}/*-session_trace.parquet', filename=true)
     GROUP BY run_id
   ),
 
@@ -70,7 +70,7 @@ COPY (
     SELECT
       regexp_extract(filename, '/(\d+)-', 1)::INTEGER AS run_id,
       COUNT(*) AS total_swaps
-    FROM read_json('{{.TracesDir}}/*-swap_trace.jsonl', filename=true, ignore_errors=true)
+    FROM read_parquet('{{.TracesDir}}/*-swap_trace.parquet', filename=true)
     GROUP BY run_id
   )
 

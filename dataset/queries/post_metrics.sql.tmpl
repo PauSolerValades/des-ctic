@@ -55,7 +55,7 @@ COPY (
       regexp_extract(filename, '/(\d+)-', 1)::INTEGER AS run_id,
       post_id,
       COUNT(*) AS total_ignores
-    FROM read_json('{{.TracesDir}}/*-action_trace.jsonl', filename=true, ignore_errors=true)
+    FROM read_parquet('{{.TracesDir}}/*-action_trace.parquet', filename=true)
     WHERE type = 'ignore'
     GROUP BY run_id, post_id
   )

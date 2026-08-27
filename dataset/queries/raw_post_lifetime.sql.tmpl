@@ -10,7 +10,7 @@ COPY (
       post_id   AS rpid,
       parent_id AS rparent,
       time      AS repost_time
-    FROM read_json('{{.TracesDir}}/*-action_trace.jsonl', filename=true, ignore_errors=true)
+    FROM read_parquet('{{.TracesDir}}/*-action_trace.parquet', filename=true)
     WHERE type = 'repost'
   ),
   propagations AS (
@@ -19,7 +19,7 @@ COPY (
       user_id   AS puser,
       post_id   AS ppid,
       time      AS propagated_time
-    FROM read_json('{{.TracesDir}}/*-propagate_trace.jsonl', filename=true, ignore_errors=true)
+    FROM read_parquet('{{.TracesDir}}/*-propagate_trace.parquet', filename=true)
   ),
   creations AS (
     SELECT run_id, post_id AS cpid, user_id AS author_id, time AS creation_time

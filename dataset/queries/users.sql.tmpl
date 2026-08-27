@@ -41,7 +41,7 @@ COPY (
   LEFT JOIN (
     SELECT regexp_extract(filename, '/(\d+)-', 1)::INTEGER AS run_id,
            user_id AS suid, COUNT(*) AS total_swaps
-    FROM read_json('{{.TracesDir}}/*-swap_trace.jsonl', filename=true, ignore_errors=true)
+    FROM read_parquet('{{.TracesDir}}/*-swap_trace.parquet', filename=true)
     GROUP BY 1, 2
   ) sw ON s.run_id = sw.run_id AND s.uid = sw.suid
 

@@ -11,7 +11,7 @@ COPY (
       type,
       time,
       backlog
-    FROM read_json('{{.TracesDir}}/*-session_trace.jsonl', filename=true, ignore_errors=true)
+    FROM read_parquet('{{.TracesDir}}/*-session_trace.parquet', filename=true)
   ),
 
   starts AS (
@@ -43,7 +43,7 @@ COPY (
       user_id,
       type,
       time
-    FROM read_json('{{.TracesDir}}/*-action_trace.jsonl', filename=true, ignore_errors=true)
+    FROM read_parquet('{{.TracesDir}}/*-action_trace.parquet', filename=true)
   )
 
   SELECT
