@@ -41,7 +41,8 @@ pub fn build(b: *Build) !void {
     const steps: []const *Build.Step = &.{ sim_step, cascades_step, datasets_step, pipeline_step, all_step };
 
     // Make all the binaries compile if necessary
-    const sim_exe = b.dependency("bskysim", .{ .optimize = .ReleaseFast }).artifact("bskysim");
+    const random_timeline = b.option(bool, "timelinerandom", "Run the random timeline experiment") orelse false;
+    const sim_exe = b.dependency("bskysim", .{ .optimize = .ReleaseFast, .timelinerandom = random_timeline }).artifact("bskysim");
     const cascades_exe = b.dependency("cascade", .{ .optimize = .ReleaseFast }).artifact("construct-cascade");
     b.installArtifact(sim_exe);
     b.installArtifact(cascades_exe);
