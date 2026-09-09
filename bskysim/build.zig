@@ -6,6 +6,10 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    const options = b.addOptions(); // generate the keyval import to the file
+    const random_timeline = b.option(bool, "timelinerandom", "Run the random timeline experiment") orelse false; // Parse the value of the option
+    options.addOption(bool, "timeline", random_timeline);
+
     const exe = b.addExecutable(.{
         .name = b.fmt("bskysim", .{}),
         .root_module = b.createModule(.{
@@ -15,6 +19,7 @@ pub fn build(b: *std.Build) !void {
         }),
     });
 
+    exe.root_module.addOptions("build", options);
     // std.heap.c_allocator (and therefore std.process.Init.gpa) needs libc.
     exe.root_module.link_libc = true;
     // Zig 0.16's linker can't handle the .sframe relocations in newer glibc

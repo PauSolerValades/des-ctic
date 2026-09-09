@@ -213,7 +213,13 @@ fn handleAction(gpa: Allocator, rng: Random, queue: *EventQueue, sim: *const Sim
         // through the global event queue for each skipped post.
         var post: ?TimelineEvent = null;
         while (user_timeline.elements.items.len > 0) {
-            const candidate = user_timeline.pop() orelse break;
+            // Stack drains LIFO; RandomArrayList pops uniformly at random.
+            // comptime flag => the other branch is never analyzed, so each
+            // -D build only sees its own program.
+            const candidate = (if (comptime timeline.random_timeline)
+                user_timeline.pop(rng)
+            else
+                user_timeline.pop()) orelse break;
             if (!sim.state.users.items(.reposted_posts)[uid].contains(candidate.post_id)) {
                 post = candidate;
                 break;

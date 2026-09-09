@@ -12,14 +12,10 @@ pub const TimelineEvent = struct {
     parent_id: u32, // this for cascade reconstruction. Who reposted this post.
 };
 
-/// Heap comparison function for user timelines in Reverse-Chronological simulations
-// pub fn compareTimelineEvent(context: void, a: TimelineEvent, b: TimelineEvent) Order {
-//     _ = context;
-//     return std.math.order(b.time, a.time);
-// }
-
-// const Timeline = ds.DaryHeap(TimelineEvent, 8, void, compareTimelineEvent);
-const Timeline = ds.Stack(TimelineEvent);
+/// true (-Dtimelinerandom): timelines drain uniformly at random (RandomArrayList)
+/// false (default): LIFO drain (Stack)
+pub const random_timeline: bool = @import("build").timeline;
+const Timeline = if (random_timeline) ds.RandomArrayList(TimelineEvent) else ds.Stack(TimelineEvent);
 
 pub const WhichTimeline = enum { a, b };
 pub const UserTimeline = struct {
