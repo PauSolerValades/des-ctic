@@ -42,6 +42,10 @@ pub fn build(b: *std.Build) !void {
         )).step);
     }
 
+    const options = b.addOptions(); // generate the keyval import to the file
+    const random_timeline = b.option(bool, "timelinerandom", "Run the random timeline experiment") orelse false; // Parse the value of the option
+    options.addOption(bool, "timeline", random_timeline);
+
     const eazy_args_dep = b.dependency("eazy_args", .{
         .target = target,
         .optimize = optimize,
