@@ -35,8 +35,7 @@ const def = .{
         Opt(u32, "workers", "w", 1, "Units of parallelism"),
     },
     .flags = .{
-        Flag("clean", "c", "Delete the .bin output of the traces"),
-        Flag("skipjsonl", "s", "Don't convert to JSONL"),
+        Flag("jsonl", "j", "'Ouput .jsonl per trace additionally with .bin"),
     },
 };
 
@@ -180,7 +179,7 @@ pub fn main(init: std.process.Init) !void {
         output_job_dir,
         args.workers,
         args.runs,
-        args.skipjsonl,
+        args.jsonl,
         stdout,
     );
 }
@@ -194,7 +193,7 @@ fn launchWorkers(
     run_dir: []const u8,
     workers: u32,
     total_runs: u32,
-    skipjsonl: bool,
+    jsonl: bool,
     stdout: *Io.Writer,
 ) !void {
     var mutex_times: Io.Mutex = .init;
@@ -235,7 +234,7 @@ fn launchWorkers(
             sim,
             worker_config,
             run_dir,
-            skipjsonl,
+            jsonl,
         };
         futures[i] = try tio.concurrent(simulationBatch, batch_args);
         try stdout.print("Spawned batch {d} with {d} runs\n", .{ i, runs });
@@ -263,7 +262,7 @@ fn simulationBatch(
     simparams: *const SimParams,
     config: WorkerConfig,
     run_dir: []const u8,
-    skipjsonl: bool,
+    jsonl: bool,
 ) !void {
     var aa: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
     defer aa.deinit();
@@ -318,7 +317,7 @@ fn simulationBatch(
                 run_dir,
                 run_idx,
                 config,
-                skipjsonl,
+                jsonl,
                 stdout,
                 stderr,
             );
@@ -354,7 +353,7 @@ fn runTracedSimulation(
     run_dir: []const u8,
     run_idx: usize,
     config: WorkerConfig,
-    skipjsonl: bool,
+    jsonl: bool,
     stdout: *Io.Writer,
     stderr: *Io.Writer,
 ) !Io.Duration {
@@ -407,6 +406,14 @@ fn runTracedSimulation(
     var swap_file_writer = swap_file.writer(io, &swap_buffer);
     const swap_writer = &swap_file_writer.interface;
 
+    // Self-describing text headers, written before any event so readers can
+    // parse the actual (compiler-chosen) field layout.
+    try traces.writeHeader(action_writer, traces.TraceAction);
+    try traces.writeHeader(session_writer, traces.TraceSession);
+    try traces.writeHeader(create_writer, traces.TraceCreate);
+    try traces.writeHeader(prop_writer, traces.TracePropagation);
+    try traces.writeHeader(swap_writer, traces.TraceSwap);
+
     const startTime = Io.Timestamp.now(io, .cpu_thread);
     const t = traces.TraceWriters{
         .action = action_writer,
@@ -444,19 +451,19 @@ fn runTracedSimulation(
     var jsonl_buf: [std.fs.max_path_bytes]u8 = undefined;
 
     const action_jsonl = try std.fmt.bufPrint(&jsonl_buf, "{s}/{d}-action_trace.jsonl", .{ run_dir, run_idx });
-    if (!skipjsonl) try traces.bytesToJsonl(io, traces.TraceAction, action_bin, action_jsonl);
+    if (jsonl) try traces.bytesToJsonl(io, traces.TraceAction, action_bin, action_jsonl);
 
     const session_jsonl = try std.fmt.bufPrint(&jsonl_buf, "{s}/{d}-session_trace.jsonl", .{ run_dir, run_idx });
-    if (!skipjsonl) try traces.bytesToJsonl(io, traces.TraceSession, session_bin, session_jsonl);
+    if (jsonl) try traces.bytesToJsonl(io, traces.TraceSession, session_bin, session_jsonl);
 
     const create_jsonl = try std.fmt.bufPrint(&jsonl_buf, "{s}/{d}-create_trace.jsonl", .{ run_dir, run_idx });
-    if (!skipjsonl) try traces.bytesToJsonl(io, traces.TraceCreate, create_bin, create_jsonl);
+    if (jsonl) try traces.bytesToJsonl(io, traces.TraceCreate, create_bin, create_jsonl);
 
     const prop_jsonl = try std.fmt.bufPrint(&jsonl_buf, "{s}/{d}-propagate_trace.jsonl", .{ run_dir, run_idx });
-    if (!skipjsonl) try traces.bytesToJsonl(io, traces.TracePropagation, prop_bin, prop_jsonl);
+    if (jsonl) try traces.bytesToJsonl(io, traces.TracePropagation, prop_bin, prop_jsonl);
 
     const swap_jsonl = try std.fmt.bufPrint(&jsonl_buf, "{s}/{d}-swap_trace.jsonl", .{ run_dir, run_idx });
-    if (!skipjsonl) try traces.bytesToJsonl(io, traces.TraceSwap, swap_bin, swap_jsonl);
+    if (jsonl) try traces.bytesToJsonl(io, traces.TraceSwap, swap_bin, swap_jsonl);
 
     return elapsed;
 }
@@ -469,12 +476,6 @@ pub fn parseAndValidateCmdArgs(iter: *std.process.Args.Iterator, stdout: *Io.Wri
         }
         std.process.exit(0);
     };
-
-    if (args.clean and args.skipjsonl) {
-        try stdout.writeAll("Flags -c/--clean and -s/--skipjsonl are mutually exclusive");
-        try stdout.flush();
-        std.process.exit(0);
-    }
 
     if (!std.mem.eql(u8, std.fs.path.extension(args.paramsfile), ".json")) {
         try stderr.print("The provided params file ({s}) does not have a 'json' extension\n", .{args.paramsfile});

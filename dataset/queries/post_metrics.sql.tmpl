@@ -52,10 +52,10 @@ COPY (
 
   ignores AS (
     SELECT
-      regexp_extract(filename, '/(\d+)-', 1)::INTEGER AS run_id,
+      run_id,
       post_id,
       COUNT(*) AS total_ignores
-    FROM read_parquet('{{.TracesDir}}/*-action_trace.parquet', filename=true)
+    FROM read_parquet('{{.TracesParquet}}/action.parquet')
     WHERE type = 'ignore'
     GROUP BY run_id, post_id
   )

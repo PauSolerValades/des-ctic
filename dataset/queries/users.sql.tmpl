@@ -39,9 +39,9 @@ COPY (
   ) cr ON s.run_id = cr.run_id AND s.uid = cr.cruid
 
   LEFT JOIN (
-    SELECT regexp_extract(filename, '/(\d+)-', 1)::INTEGER AS run_id,
+    SELECT run_id,
            user_id AS suid, COUNT(*) AS total_swaps
-    FROM read_parquet('{{.TracesDir}}/*-swap_trace.parquet', filename=true)
+    FROM read_parquet('{{.TracesParquet}}/swap.parquet')
     GROUP BY 1, 2
   ) sw ON s.run_id = sw.run_id AND s.uid = sw.suid
 

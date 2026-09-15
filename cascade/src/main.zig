@@ -161,24 +161,32 @@ fn obtainRunIds(
     gpa: Allocator,
     dir: Io.Dir,
     list: *std.ArrayList(usize),
-) (error{ NoRunId, OutOfMemory } || std.fmt.ParseIntError || Io.Dir.Iterator.Error)!void {
+) !void {
     const Set = @import("set").Set;
 
     var iterator = dir.iterate();
     var run_ids: Set(usize) = .empty;
     defer run_ids.deinit(gpa);
+    var skipped: usize = 0;
     while (true) {
         const element = try iterator.next(io);
 
         if (element) |entry| {
-            const len = entry.name.len;
-            if (!std.mem.eql(u8, entry.name[len - 4 .. len], ".bin")) continue;
+            if (!std.mem.endsWith(u8, entry.name, "-action_trace.bin")) continue;
 
             const id = getRunId(entry.name) catch continue;
+            if (!try traces.isCompleteRun(dir, io, id)) {
+                skipped += 1;
+                continue;
+            }
             _ = try run_ids.add(gpa, id);
         } else {
             break;
         }
+    }
+
+    if (skipped > 0) {
+        std.debug.print("warning: skipped {d} incomplete run(s)\n", .{skipped});
     }
 
     // Copy the set into an array list for easy iteration

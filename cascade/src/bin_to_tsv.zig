@@ -25,6 +25,7 @@ pub fn processRepost(io: Io, id: usize, bucket_writers: []*Io.Writer, traceDir: 
     var buffer: [4 * 1024]u8 = undefined;
     var trace_reader = rt_file.reader(io, &buffer);
     const trace = &trace_reader.interface;
+    try traces.skipHeader(trace);
 
     while (try nextTrace(traces.TraceAction, trace)) |pc| {
         if (pc.type == .ignore) continue;
@@ -50,6 +51,7 @@ pub fn processPropagation(io: Io, id: usize, bucket_writers: []*Io.Writer, trace
     var buffer: [4 * 1024]u8 = undefined;
     var trace_reader = prop_file.reader(io, &buffer);
     const trace = &trace_reader.interface;
+    try traces.skipHeader(trace);
 
     while (try nextTrace(traces.TracePropagation, trace)) |pc| {
         const hashed_id = std.hash.Wyhash.hash(0, std.mem.asBytes(&pc.post_id));
@@ -74,6 +76,7 @@ pub fn processCreation(io: Io, id: usize, bucket_writers: []*Io.Writer, traceDir
     var buffer: [4 * 1024]u8 = undefined;
     var trace_reader = creation_file.reader(io, &buffer);
     const trace = &trace_reader.interface;
+    try traces.skipHeader(trace);
 
     while (try nextTrace(traces.TraceCreate, trace)) |pc| {
         const hashed_id = std.hash.Wyhash.hash(0, std.mem.asBytes(&pc.post_id));

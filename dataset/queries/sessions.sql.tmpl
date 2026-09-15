@@ -6,12 +6,12 @@ COPY (
   WITH
   session_events AS (
     SELECT
-      regexp_extract(filename, '/(\d+)-', 1)::INTEGER AS run_id,
+      run_id,
       user_id,
       type,
       time,
       backlog
-    FROM read_parquet('{{.TracesDir}}/*-session_trace.parquet', filename=true)
+    FROM read_parquet('{{.TracesParquet}}/session.parquet')
   ),
 
   starts AS (
@@ -21,7 +21,7 @@ COPY (
 
   ends AS (
     SELECT *, ROW_NUMBER() OVER (PARTITION BY run_id, user_id ORDER BY time) AS n
-    FROM session_events WHERE type = 'end'
+    FROM session_events WHERE type IN ('end', 'end_boredom')
   ),
 
   paired AS (
@@ -39,11 +39,11 @@ COPY (
 
   actions AS (
     SELECT
-      regexp_extract(filename, '/(\d+)-', 1)::INTEGER AS run_id,
+      run_id,
       user_id,
       type,
       time
-    FROM read_parquet('{{.TracesDir}}/*-action_trace.parquet', filename=true)
+    FROM read_parquet('{{.TracesParquet}}/action.parquet')
   )
 
   SELECT

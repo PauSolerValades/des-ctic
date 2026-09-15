@@ -5,21 +5,21 @@ COPY (
   WITH
   reposts AS (
     SELECT
-      regexp_extract(filename, '/(\d+)-', 1)::INTEGER AS run_id,
+      run_id,
       user_id   AS reposter_id,
       post_id   AS rpid,
       parent_id AS rparent,
       time      AS repost_time
-    FROM read_parquet('{{.TracesDir}}/*-action_trace.parquet', filename=true)
+    FROM read_parquet('{{.TracesParquet}}/action.parquet')
     WHERE type = 'repost'
   ),
   propagations AS (
     SELECT
-      regexp_extract(filename, '/(\d+)-', 1)::INTEGER AS run_id,
+      run_id,
       user_id   AS puser,
       post_id   AS ppid,
       time      AS propagated_time
-    FROM read_parquet('{{.TracesDir}}/*-propagate_trace.parquet', filename=true)
+    FROM read_parquet('{{.TracesParquet}}/propagation.parquet')
   ),
   creations AS (
     SELECT run_id, post_id AS cpid, user_id AS author_id, time AS creation_time

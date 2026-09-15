@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"text/template"
 
@@ -19,10 +20,10 @@ import (
 var queryTemplates embed.FS
 
 type TemplateData struct {
-	CascadesSSV string
-	LikesSSV    string
-	TracesDir   string
-	OutputDir   string
+	CascadesSSV   string
+	LikesSSV      string
+	TracesParquet string
+	OutputDir     string
 }
 
 func main() {
@@ -45,11 +46,19 @@ func main() {
 		os.Exit(1)
 	}
 
+	tracesParquet := filepath.Join(*outputDir, "traces")
+	if needed := neededTraceKinds(dataset); len(needed) > 0 {
+		if err := convertTraces(tracesDir, tracesParquet, needed); err != nil {
+			fmt.Fprintf(os.Stderr, "convert traces: %v\n", err)
+			os.Exit(1)
+		}
+	}
+
 	data := TemplateData{
-		CascadesSSV: cascadesSSV,
-		LikesSSV:    likesSSV,
-		TracesDir:   tracesDir,
-		OutputDir:   *outputDir,
+		CascadesSSV:   cascadesSSV,
+		LikesSSV:      likesSSV,
+		TracesParquet: tracesParquet,
+		OutputDir:     *outputDir,
 	}
 
 	switch dataset {
@@ -246,9 +255,9 @@ func readSSV(path string) ([]cascade.Root, []cascade.Repost, error) {
 
 		switch typ {
 		case "creation":
-			roots = append(roots, cascade.Root{uint32(runID), uint32(postID), uint32(userID), t})
+			roots = append(roots, cascade.Root{RunID: uint32(runID), PostID: uint32(postID), AuthorID: uint32(userID), Time: t})
 		case "repost":
-			reposts = append(reposts, cascade.Repost{uint32(runID), uint32(postID), uint32(userID), uint32(parentID), t})
+			reposts = append(reposts, cascade.Repost{RunID: uint32(runID), PostID: uint32(postID), UserID: uint32(userID), ParentID: uint32(parentID), Time: t})
 		}
 	}
 	return roots, reposts, nil
