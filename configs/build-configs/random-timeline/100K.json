@@ -1,0 +1,12 @@
+{
+  "simulation": {
+    "workers": 3,
+    "runs": 100,
+    "output_dir": "steps/random-timeline/traces/100K",
+    "data_file": "data/monotonic/100K_monotonic.bin",
+    "config_file": "configs/simconfs/final.json",
+    "userparams_file": "configs/simconfs/users.json"
+  },
+  "cascade": null,
+  "dataset": null
+}

@@ -1,0 +1,16 @@
+{
+  "simulation": null,
+  "cascade": {
+    "buckets": null,
+    "bucket_file": null,
+    "output_file": "steps/random-timeline/cascades/500K.tsv",
+    "traces_dir": "steps/random-timeline/traces/500K"
+  },
+  "dataset": {
+    "output_dir": "steps/random-timeline/datasets/500K",
+    "cascades_ssv": "steps/random-timeline/cascades/500K.tsv",
+    "likes_ssv": "steps/random-timeline/cascades/500K_likes.tsv",
+    "traces_dir": "steps/random-timeline/traces/500K",
+    "dataset": "all"
+  }
+}

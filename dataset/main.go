@@ -123,6 +123,10 @@ func runSQL(tmplName string, data TemplateData) {
 	}
 	defer os.Remove(tmp.Name())
 
+	if _, err := tmp.WriteString("SET memory_limit='400GB';\n"); err != nil {
+		fmt.Fprintf(os.Stderr, "temp file write error: %v\n", err)
+		os.Exit(1)
+	}
 	if _, err := tmp.Write(buf.Bytes()); err != nil {
 		fmt.Fprintf(os.Stderr, "temp file write error: %v\n", err)
 		os.Exit(1)

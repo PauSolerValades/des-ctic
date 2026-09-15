@@ -10,13 +10,13 @@
   "cascade": {
     "buckets": null,
     "bucket_file": null,
-    "output_file": "cascades/final/500K.tsv",
+    "output_file": "steps/final/cascades/500K.tsv",
     "traces_dir": "steps/final/traces/500K"
   },
   "dataset": {
-    "output_dir": "datasets/final/500K",
-    "cascades_ssv": "cascades/final/500K.tsv",
-    "likes_ssv": "cascades/final/500K_likes.tsv",
+    "output_dir": "steps/final/datasets/500K",
+    "cascades_ssv": "steps/final/cascades/500K.tsv",
+    "likes_ssv": "steps/final/cascades/500K_likes.tsv",
     "traces_dir": "steps/final/traces/500K",
     "dataset": "all"
   }
